@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light"><meta name="robots" content="noindex,nofollow">
-<meta name="app-version" content="2026.10.30-v2.2">
-<meta name="ui-revision" content="R4-statistics-overview">
-<title>УБАИТ · Story Map</title>
+<meta name="app-version" content="2026.10.30-v2.3">
+<meta name="ui-revision" content="R5-HR-departments">
+<title>УБАИТ · Команда и продукты</title>
+<link rel="stylesheet" href="/hr.css">
 <style>
 :root{color-scheme:light;--bg:#faf9f7;--paper:#fff;--ink:#22303b;--sub:#65717b;--line:#dce1e5;--accent:#896322;--soft:#f3eddf;--track:#e7e9e9;--green:#266e52;--blue:#326297;--danger:#9b391b;--col:236px;--rail:76px}
 :root[data-theme="dark"]{color-scheme:dark;--bg:#191b1d;--paper:#23272a;--ink:#e8edf1;--sub:#abb8c2;--line:#3b444a;--accent:#e5bf76;--soft:#3b3425;--track:#384149;--green:#98d6b4;--blue:#9fc4f1;--danger:#f1ae88}
@@ -82,8 +83,8 @@ dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);bor
 <body>
 <header class="app-bar">
  <h1 class="app-brand">УБАИТ</h1>
- <nav class="app-tabs" id="app-tabs" role="tablist" aria-label="Разделы приложения"><button class="app-tab" role="tab" id="story-map-tab" data-view="map" aria-selected="true" aria-controls="viewport">Story Map</button><button class="app-tab" role="tab" id="errors-tab" data-view="errors" aria-selected="false" aria-controls="errors-view" tabindex="-1">Ошибки</button><button class="app-tab" role="tab" id="statistics-tab" data-view="statistics" aria-selected="false" aria-controls="statistics-view" tabindex="-1">Статистика</button></nav>
- <span class="build-version" title="Сборка 2026.10.30-v2.2 · новый обзор статистики">v2.2 · 30.10 · R4</span>
+ <nav class="app-tabs" id="app-tabs" role="tablist" aria-label="Разделы приложения"><button class="app-tab" role="tab" id="story-map-tab" data-view="map" aria-selected="true" aria-controls="viewport">Story Map</button><button class="app-tab" role="tab" id="errors-tab" data-view="errors" aria-selected="false" aria-controls="errors-view" tabindex="-1">Ошибки</button><button class="app-tab" role="tab" id="statistics-tab" data-view="statistics" aria-selected="false" aria-controls="statistics-view" tabindex="-1">Статистика</button><button class="app-tab" role="tab" id="hr-tab" data-view="hr" aria-selected="false" aria-controls="hr-view" tabindex="-1">HR</button></nav>
+ <span class="build-version" title="Сборка 2026.10.30-v2.3 · HR и отделы из штатки">v2.3 · 30.10 · R5</span>
  <button class="action" id="theme-toggle" title="Включить тёмную тему" aria-label="Включить тёмную тему">Светлая тема</button>
 </header>
 <section class="app-panel" id="story-map-panel">
@@ -107,6 +108,7 @@ dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);bor
 <main class="viewport" id="viewport" role="tabpanel" aria-labelledby="story-map-tab" aria-label="Карта проектов, эпиков и историй"><div class="matrix" id="matrix"></div></main>
 <section class="aux-view" id="errors-view" role="tabpanel" aria-labelledby="errors-tab" hidden></section>
 <section class="aux-view" id="statistics-view" role="tabpanel" aria-labelledby="statistics-tab" hidden></section>
+<section id="hr-view" role="tabpanel" aria-labelledby="hr-tab" hidden></section>
 <div class="xbar" id="map-xbar" aria-label="Горизонтальная прокрутка карты">
  <button id="scroll-left" aria-label="Прокрутить карту влево">←</button>
  <input id="horizontal-scroll" type="range" min="0" max="10000" step="1" value="0" aria-label="Положение карты по горизонтали">
@@ -147,7 +149,7 @@ globalThis.StoryMapModel=(()=>{
  const positive=m=>monthKey(m.month)&&m.sp_utilized!==null&&m.sp_utilized>0;
  function inPeriod(month,period){if(!monthKey(month))return false;if(/^\d{4}\.Q[1-4]$/.test(period))return month.slice(0,4)===period.slice(0,4)&&Math.ceil(Number(month.slice(5))/3)===Number(period.at(-1));return month===period;}
  function build(data,{includeExcluded=false}={}){
-  if(data?.schema_version!==1||![2,3].includes(data.api_revision)||!Array.isArray(data.stories)||!Array.isArray(data.epics))throw new Error('Нужен обновлённый запрос Story Map в ноде PostgreSQL. Замените SQL вебхука.');
+  if(data?.schema_version!==1||![2,3,4].includes(data.api_revision)||!Array.isArray(data.stories)||!Array.isArray(data.epics))throw new Error('Нужен обновлённый запрос Story Map в ноде PostgreSQL. Замените SQL вебхука.');
   const epics=new Map(),stories=new Map(),projects=new Map();
   for(const r of data.epics){const id=text(r.id);if(!/^\d+$/.test(id)||epics.has(id))throw new Error('Некорректный или повторный ID эпика.');epics.set(id,{...r,id,title:text(r.title)||'Название не загружено · #'+id,titleMissing:!text(r.title),project:text(r.project)||'Без проекта',sp:number(r.sp),used:number(r.sp_utilized),pct:number(r.ready)===null?null:number(r.ready)*100,stories:[],missing:false});}
   for(const r of data.stories){
@@ -157,7 +159,9 @@ globalThis.StoryMapModel=(()=>{
    if(!epics.has(eid))epics.set(eid,{id:eid,title:eid==='unassigned'?'Без эпика':'Эпик #'+eid+' не загружен',titleMissing:true,project:'Без проекта',sp:null,used:null,pct:null,stories:[],missing:true});
    const e=epics.get(eid),months=(Array.isArray(r.months)?r.months:[]).map(m=>({...m,month:text(m.month),start:number(m.start),end:number(m.end),sp_utilized:number(m.sp_utilized),sp_ready:number(m.sp_ready)})).sort((a,b)=>(monthKey(a.month)||'').localeCompare(monthKey(b.month)||''));
    const s={...r,id,epic_id:eid,title:text(r.title)||'История #'+id,status:text(r.status),lane:lane(r.status),sp:number(r.sp_true),used:number(r.sp_utilized),pct:months.filter(m=>monthKey(m.month)).at(-1)?.end??null,months,project:e.project,issues:[],facets:{}};
-   for(const k of ['stakeholder','stream','department','ba']){s[k]=text(r[k]);s.facets[k]=tokens(r[k]);}
+   for(const k of ['stakeholder','stream','department','ba']){const value=k==='department'&&data.meta?.department_source!=='unit.team'?'':r[k];s[k]=text(value);s.facets[k]=tokens(value);}
+   if(data.meta?.department_source!=='unit.team')s.issues.push('Источник отделов ещё не обновлён: нужен SQL со штаткой unit.team');
+   else if(r.department_match&&r.department_match!=='matched')s.issues.push(({no_analyst:'Не указан аналитик',not_found:'ФИО аналитика не найдено в штатке',ambiguous:'В штатке несколько людей с одинаковым ФИО',no_department:'В штатной карточке не указан отдел'})[r.department_match]||'Отдел не сопоставлен');
    s.direction=text(r.direction);s.facets.direction=directions(r.direction);
    if(s.lane==='other')s.issues.push('Статус не сопоставлен с горизонталью: '+s.status);
    if(s.pct===null)s.issues.push('Нет месячного факта готовности');
@@ -192,6 +196,7 @@ globalThis.StoryMapModel=(()=>{
 </script>
 <script src="/errors.js"></script>
 <script src="/stat.js"></script>
+<script src="/hr.js"></script>
 <script id="story-map-app">
 (()=>{
  const $=id=>document.getElementById(id),M=globalThis.StoryMapModel;
@@ -251,11 +256,13 @@ globalThis.StoryMapModel=(()=>{
   $('reset').disabled=!hasChanges()&&!statsState.focusPeriod;
  }
  function openStatisticsDetail(id,more=false){if(!statsReport)return;statsState.detailId=id;statsState.detailLimit=more?statsState.detailLimit+40:40;const content=globalThis.StoryMapStatistics.detail(statsReport,id,{escape,fmt,model,focusPeriod:statsState.focusPeriod,limit:statsState.detailLimit});if(!content)return;$('detail-id').textContent='Статистика · '+globalThis.StoryMapStatistics.groups[statsState.groupBy];$('detail-body').innerHTML=content;$('detail').showModal();}
- function showView(next){view=next;for(const key of ['map','errors','statistics']){const button=$(key==='map'?'story-map-tab':key+'-tab');button.setAttribute('aria-selected',String(view===key));button.setAttribute('tabindex',view===key?'0':'-1');}render(true);}
+ function showView(next){view=next;for(const key of ['map','errors','statistics','hr']){const button=$(key==='map'?'story-map-tab':key+'-tab');button.setAttribute('aria-selected',String(view===key));button.setAttribute('tabindex',view===key?'0':'-1');}render(true);}
  function render(resetPosition=false){
   $('story-map-panel').dataset.view=view;
+  $('hr-view').hidden=view!=='hr';
   $('viewport').hidden=view!=='map';$('map-xbar').hidden=view!=='map';$('errors-view').hidden=view!=='errors';$('statistics-view').hidden=view!=='statistics';$('stats-controls').hidden=view!=='statistics';$('orphan-view').hidden=view!=='map';$('issues-view').hidden=view!=='map';
-  if(!model)return;viewGroups=M.groups(model,state);viewEpics=viewGroups.flatMap(p=>p.epics);const count=viewEpics.reduce((n,e)=>n+e.visible.length,0);
+  if(view==='hr'){$('message').hidden=true;$('loading-cover').hidden=true;globalThis.UbaitHR?.mount($('hr-view'));return;}
+  if(!model){$('loading-cover').hidden=!loading;return;}viewGroups=M.groups(model,state);viewEpics=viewGroups.flatMap(p=>p.epics);const count=viewEpics.reduce((n,e)=>n+e.visible.length,0);
   $('counts').textContent=`${viewGroups.length} проектов · ${viewEpics.length} эпиков · ${count} историй`;
   $('project-year').textContent=(view==='statistics'?'Год · ':'Год проектов · ')+(state.projectYear?(state.exclude.projectYear?'Кроме ':'')+state.projectYear:'Все');$('project-year').title=view==='statistics'?'Год месячного факта задач, независимо от проектов':'Проекты с месячной утилизацией в выбранном году';$('project-year').classList.toggle('active',!!state.projectYear);
   $('story-period').textContent=(view==='statistics'?'Период · ':'Период историй · ')+(state.periods.length&&state.exclude.periods?'Кроме ':'')+(state.periods.length===1?periodLabel(state.periods[0]):state.periods.length||'Все');$('story-period').classList.toggle('active',!!state.periods.length);$('story-period').title=view==='statistics'?'Ограничить месячный факт выбранными периодами':'Истории с утилизацией в месяце или квартале';
@@ -297,13 +304,13 @@ globalThis.StoryMapModel=(()=>{
    try{data=await response.json();}catch{throw new Error('Сервер вернул не JSON. Проверьте вебхук Story Map.');}
    if(!response.ok)throw new Error(data.error||'HTTP '+response.status);
    const next=M.build(data),nextErrors=M.build(data,{includeExcluded:true});
-   model=next;errorModel=nextErrors;errorCoverage=data.api_revision===3&&data.meta?.errors_include_excluded===true;
+   model=next;errorModel=nextErrors;errorCoverage=data.api_revision>=3&&data.meta?.errors_include_excluded===true;
    render(true);$('connection').textContent='Срез: '+date(model.generatedAt);
-  }catch(e){$('message').hidden=false;$('message').className='message error';$('message').textContent=(e.name==='TimeoutError'?'Истекло время ожидания вебхука n8n.':e.message)+' Повторить загрузку: ↻ вверху.';$('connection').textContent=model?'На экране предыдущий срез':'Нет соединения';}
+  }catch(e){$('message').hidden=view==='hr';$('message').className='message error';$('message').textContent=(e.name==='TimeoutError'?'Истекло время ожидания вебхука n8n.':e.message)+' Повторить загрузку: ↻ вверху.';$('connection').textContent=model?'На экране предыдущий срез':'Нет соединения';}
   finally{loading=false;$('loading-cover').hidden=true;$('refresh').disabled=false;$('story-map-panel').setAttribute('aria-busy','false');}
  }
- $('app-tabs').addEventListener('click',e=>{const next=e.target.closest('[data-view]')?.dataset.view;if(['map','errors','statistics'].includes(next))showView(next);});
- $('app-tabs').addEventListener('keydown',e=>{const keys=['map','errors','statistics'],i=keys.indexOf(view);let next;if(e.key==='ArrowRight')next=keys[(i+1)%3];if(e.key==='ArrowLeft')next=keys[(i+2)%3];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys[2];if(next){e.preventDefault();showView(next);$(next==='map'?'story-map-tab':next+'-tab').focus();}});
+ $('app-tabs').addEventListener('click',e=>{const next=e.target.closest('[data-view]')?.dataset.view;if(['map','errors','statistics','hr'].includes(next))showView(next);});
+ $('app-tabs').addEventListener('keydown',e=>{const keys=['map','errors','statistics','hr'],i=keys.indexOf(view);let next;if(e.key==='ArrowRight')next=keys[(i+1)%keys.length];if(e.key==='ArrowLeft')next=keys[(i+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();showView(next);$(next==='map'?'story-map-tab':next+'-tab').focus();}});
  $('errors-view').addEventListener('click',e=>{const d=e.target.closest('button')?.dataset;if(!d)return;if(d.story)openStory(d.story);else if(d.epic)openEpic(d.epic);else if(d.errorMore){errorLimit+=60;renderOther();}});
  $('stats-controls').addEventListener('click',e=>{const d=e.target.closest('button')?.dataset;if(!d?.statsMetric||!model)return;statsState.metric=d.statsMetric;renderOther();});
  $('statistics-view').addEventListener('click',e=>{const button=e.target.closest('button'),d=button?.dataset;if(!d||!statsReport||button.disabled)return;

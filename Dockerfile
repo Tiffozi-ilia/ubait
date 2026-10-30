@@ -1,6 +1,6 @@
 FROM node:22-alpine
 WORKDIR /app
-COPY index.html errors.js stat.js server.mjs check-build.mjs ./
+COPY index.html errors.js stat.js hr.js hr.css server.mjs check-build.mjs ./
 RUN node --check server.mjs && node check-build.mjs
 ENV NODE_ENV=production
 ENV PORT=8080
