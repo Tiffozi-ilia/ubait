@@ -8,34 +8,47 @@ import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 
-export const BUILD_VERSION='2026.10.30-v2.3';
+export const BUILD_VERSION='2026.10.30-v2.4';
+
+export function hrWebhookAddress(mapAddress){
+  if(!mapAddress)throw Object.assign(new Error('В Amvera не задана переменная STORY_MAP_WEBHOOK_URL.'),{status:503});
+  let target;try{target=new URL(mapAddress);}catch{throw Object.assign(new Error('STORY_MAP_WEBHOOK_URL содержит неверный адрес.'),{status:503});}
+  if(!/\/reestr-story-map-v1\/?$/.test(target.pathname))throw Object.assign(new Error('В STORY_MAP_WEBHOOK_URL ожидается путь reestr-story-map-v1 для автоматического подключения HR.'),{status:503});
+  target.pathname=target.pathname.replace(/\/reestr-story-map-v1\/?$/,'/reestr-hr-v1');
+  target.search='';target.hash='';return target.href;
+}
 
 export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_URL, fetchImpl=fetch, now=Date.now, cacheMs=15000}={}) {
-  let cache=null, pending=null;
   const htmlPath=new URL('./index.html',import.meta.url);
-  async function upstream() {
+  function channel(kind){
+   let cache=null,pending=null;
+   return async function upstream() {
     if(cache && now()-cache.at<cacheMs) return cache.body;
     if(pending) return pending;
     pending=(async()=>{
       if(!webhookUrl) throw Object.assign(new Error('В Amvera не задана переменная STORY_MAP_WEBHOOK_URL.'),{status:503});
       let target;
-      try { target=new URL(webhookUrl); } catch { throw Object.assign(new Error('STORY_MAP_WEBHOOK_URL содержит неверный адрес.'),{status:503}); }
+      try { target=new URL(kind==='hr'?hrWebhookAddress(webhookUrl):webhookUrl); } catch(error) { if(error.status)throw error;throw Object.assign(new Error('STORY_MAP_WEBHOOK_URL содержит неверный адрес.'),{status:503}); }
       if(target.protocol!=='https:' || target.username || target.password) throw Object.assign(new Error('STORY_MAP_WEBHOOK_URL должен быть HTTPS-адресом без логина и пароля.'),{status:503});
       const controller=new AbortController();
       const timer=setTimeout(()=>controller.abort(),65000);
       try {
         const response=await fetchImpl(target,{headers:{Accept:'application/json'},signal:controller.signal,redirect:'error'});
-        if(!response.ok) throw new Error(`Вебхук n8n вернул HTTP ${response.status}. Проверьте активацию флоу и его выполнение.`);
+        if(!response.ok) throw new Error(`Вебхук n8n${kind==='hr'?' HR':''} вернул HTTP ${response.status}. Проверьте активацию флоу${kind==='hr'?' «HR — реальные данные 405691»':''} и его выполнение.`);
         if(Number(response.headers.get('content-length'))>20*1024*1024) throw new Error('Ответ n8n больше 20 МБ — нужен компактный JSON Story Map.');
         const reader=response.body.getReader();const chunks=[];let size=0;
         for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>20*1024*1024){await reader.cancel();throw new Error('Ответ n8n больше 20 МБ.');}chunks.push(Buffer.from(value));}
         let data;try{data=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new Error('Вебхук вернул не JSON. Проверьте последнюю ноду Respond to Webhook.');}
-        if(data?.schema_version!==1 || !Array.isArray(data.stories) || !Array.isArray(data.epics)) throw new Error('Неверный ответ n8n: ожидаются schema_version: 1, stories и epics.');
+        if(kind==='hr'){
+          if(data?.schema_version!==1||data.dataset!=='hr'||data.api_revision!==1||data.source_form_id!==405691||!Array.isArray(data.cards))throw new Error('Неверный ответ n8n HR: нужен флоу «HR — реальные данные 405691».');
+        }else if(data?.schema_version!==1 || !Array.isArray(data.stories) || !Array.isArray(data.epics)) throw new Error('Неверный ответ n8n: ожидаются schema_version: 1, stories и epics.');
         const body=JSON.stringify(data);cache={body,at:now()};return body;
       } finally { clearTimeout(timer); }
     })().catch(error=>{cache=null;throw error;}).finally(()=>{pending=null;});
     return pending;
+   };
   }
+  const upstream=channel('map'),hrUpstream=channel('hr');
   const server=http.createServer(async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('Referrer-Policy','no-referrer');
@@ -49,6 +62,10 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
       if(url.pathname==='/healthz')return json(200,{ok:true,version:BUILD_VERSION});
       if(url.pathname==='/api/story-map'){
         const body=await upstream();res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:body);
+      }
+      if(url.pathname==='/api/hr'){
+        res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');
+        const body=await hrUpstream();res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:body);
       }
       if(['/errors.js','/stat.js','/hr.js','/hr.css'].includes(url.pathname)){
         const source=await readFile(new URL('.'+url.pathname,import.meta.url),'utf8');

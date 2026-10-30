@@ -1,4 +1,14 @@
-/* HR R5. Local synthetic demonstration, no personnel endpoint. */
+/* HR R6. Live read-only personnel data. */
+.hr-live{margin-left:auto;align-self:center;color:var(--hr-teal);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#hr-view .hr-refresh{font-size:18px;padding:0 10px;flex-shrink:0}
+.hr-loading{flex:1;align-content:center;gap:15px}
+.hr-spinner{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--hr-violet);border-radius:50%;animation:hr-spin 1s linear infinite}
+.hr-failure{margin:0!important;border-left-color:var(--danger)!important;color:var(--danger)!important}
+.hr-identity a{color:var(--sub);text-decoration:none}.hr-identity a:hover{text-decoration:underline}
+@keyframes hr-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.hr-spinner{animation:none;border-style:dotted}}
+@media(max-width:760px){.hr-live{font-size:0}.hr-live:after{content:'БД';font-size:10px}.hr-subnav{gap:2px}}
+@media(max-width:500px){#hr-view .hr-directory-top{flex-wrap:wrap;gap:6px}#hr-view .hr-directory-top .hr-search{min-width:150px}#hr-view .hr-directory{max-height:190px}}
 .hr-competency-layout>div{min-width:0;width:100%}
 @media(max-width:500px){
  #hr-view .hr-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}

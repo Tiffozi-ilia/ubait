@@ -14,7 +14,7 @@ for(const name of ['errors.js','stat.js','hr.js']){
   assert(html.includes(`src="/${name}"`),`Missing module ${name}`);
   new Script(await readFile(new URL('./'+name,import.meta.url),'utf8'),{filename:name});
 }
-for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','hr-tab','v2.3 · 30.10']){
+for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','hr-tab','v2.4 · 30.10']){
   assert(html.includes(text),`Current UI is missing: ${text}`);
 }
 assert(!html.includes('<select'),'Old native-select interface must not be packaged.');
