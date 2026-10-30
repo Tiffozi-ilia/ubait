@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light"><meta name="robots" content="noindex,nofollow">
-<meta name="app-version" content="2026.10.30-v2.4">
-<meta name="ui-revision" content="R6-HR-live">
+<meta name="app-version" content="2026.10.30-v2.5">
+<meta name="ui-revision" content="R7-auth">
 <title>УБАИТ · Команда и продукты</title>
 <link rel="stylesheet" href="/hr.css">
 <style>
@@ -84,7 +84,8 @@ dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);bor
 <header class="app-bar">
  <h1 class="app-brand">УБАИТ</h1>
  <nav class="app-tabs" id="app-tabs" role="tablist" aria-label="Разделы приложения"><button class="app-tab" role="tab" id="story-map-tab" data-view="map" aria-selected="true" aria-controls="viewport">Story Map</button><button class="app-tab" role="tab" id="errors-tab" data-view="errors" aria-selected="false" aria-controls="errors-view" tabindex="-1">Ошибки</button><button class="app-tab" role="tab" id="statistics-tab" data-view="statistics" aria-selected="false" aria-controls="statistics-view" tabindex="-1">Статистика</button><button class="app-tab" role="tab" id="hr-tab" data-view="hr" aria-selected="false" aria-controls="hr-view" tabindex="-1">HR</button></nav>
- <span class="build-version" title="Сборка 2026.10.30-v2.4 · HR и отделы из штатки">v2.4 · 30.10 · R6</span>
+ <span class="build-version" title="Сборка 2026.10.30-v2.5 · HR и отделы из штатки">v2.5 · 30.10 · R7</span>
+ <button class="action" id="logout" title="Выйти из аккаунта">Выйти</button>
  <button class="action" id="theme-toggle" title="Включить тёмную тему" aria-label="Включить тёмную тему">Светлая тема</button>
 </header>
 <section class="app-panel" id="story-map-panel">
@@ -194,6 +195,7 @@ globalThis.StoryMapModel=(()=>{
  return {build,groups,matches,cutMatches,defaults,options,lane,number,positive,inPeriod,currentYear};
 })();
 </script>
+<script src="/auth-client.js"></script>
 <script src="/errors.js"></script>
 <script src="/stat.js"></script>
 <script src="/hr.js"></script>
@@ -301,6 +303,7 @@ globalThis.StoryMapModel=(()=>{
   try{
    if(!globalThis.StoryMapErrors||!globalThis.StoryMapStatistics)throw new Error('Не загрузились errors.js или stat.js. Проверьте, что оба файла добавлены на сервер.');
    const response=await fetch('/api/story-map',{cache:'no-store',signal:AbortSignal.timeout(70000)});let data;
+   if(globalThis.UbaitAuth)await UbaitAuth.checked(response);
    try{data=await response.json();}catch{throw new Error('Сервер вернул не JSON. Проверьте вебхук Story Map.');}
    if(!response.ok)throw new Error(data.error||'HTTP '+response.status);
    const next=M.build(data),nextErrors=M.build(data,{includeExcluded:true});

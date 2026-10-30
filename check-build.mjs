@@ -10,11 +10,11 @@ assert.equal(html.match(/<meta name="app-version" content="([^"]+)"/)?.[1],BUILD
 const scripts=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].filter(m=>m[1].trim());
 assert.equal(scripts.length,2,'Expected both Story Map scripts.');
 scripts.forEach((match,i)=>new Script(match[1],{filename:`index-script-${i+1}`}));
-for(const name of ['errors.js','stat.js','hr.js']){
+for(const name of ['errors.js','stat.js','hr.js','auth-client.js']){
   assert(html.includes(`src="/${name}"`),`Missing module ${name}`);
   new Script(await readFile(new URL('./'+name,import.meta.url),'utf8'),{filename:name});
 }
-for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','hr-tab','v2.4 · 30.10']){
+for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','hr-tab','v2.5 · 30.10']){
   assert(html.includes(text),`Current UI is missing: ${text}`);
 }
 assert(!html.includes('<select'),'Old native-select interface must not be packaged.');

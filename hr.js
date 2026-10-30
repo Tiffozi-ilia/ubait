@@ -1,6 +1,6 @@
-/* HR R6 — live read-only data from /api/hr, no demo fallback.
+/* HR R7 — authenticated live read-only data from /api/hr, no demo fallback.
  * Six existing tables: unit, check, skills_employee, skills_boss, kpi, skills.
- * No user authentication is implemented, per owner's explicit instruction.
+ * Server-side PocketBase authentication is required for this endpoint.
  * KPI achievement/payments are NOT inferred from plan/fact.
  */
 globalThis.UbaitHR=(()=>{
@@ -61,6 +61,11 @@ globalThis.UbaitHR=(()=>{
     people.forEach(p=>p.same_person_cards=duplicates.get(String(p.unit.staff_id))||1);
     return {people,references,cards,year:yearNow(),meta:payload.meta,generated_at:payload.generated_at};
   }
+  function matchEmployee(data,fullName){
+    const norm=v=>String(v||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ');
+    const matches=fullName?data.people.filter(p=>norm(p.unit.staff)===norm(fullName)):[];
+    return {status:matches.length===1?'matched':matches.length?'ambiguous':'not_found',card:matches.length===1?matches[0]:null};
+  }
   function referenceLabel(r,data){
     if(!r)return 'Эталон не выбран';
     const grade=r.unit.grade||'Без грейда';
@@ -113,7 +118,7 @@ globalThis.UbaitHR=(()=>{
   function mount(root){
     if(root.dataset.hrMounted==='true')return;
     root.dataset.hrMounted='true';
-    let data=null,loading=false,error='';
+    let data=null,loading=false,error='',awaitingPerson=false;
     const state={tab:'competencies',person:'',query:'',department:'',status:'',kind:'employee',reference:'',year:yearNow(),horizon:'',goalQuery:'',iprQuery:''};
     const person=()=>data?.people.find(p=>p.unit.task_id===state.person);
     const filtered=()=>data.people.filter(p=>(!state.department||p.unit.team===state.department)&&(!state.status||p.unit.status===state.status)&&(!state.query||[title(p),p.unit.position,p.unit.team,p.unit.task_id].join(' ').toLocaleLowerCase('ru').includes(state.query.toLocaleLowerCase('ru'))));
@@ -125,7 +130,7 @@ globalThis.UbaitHR=(()=>{
         return;
       }
       const people=filtered(),oldPerson=state.person;
-      if(!people.some(p=>p.unit.task_id===state.person))state.person=people[0]?.unit.task_id??'';
+      if(!awaitingPerson&&!people.some(p=>p.unit.task_id===state.person))state.person=people[0]?.unit.task_id??'';
       const p=person();if(state.person!==oldPerson)state.reference=defaultReference(p,data);
       const departments=[...new Set(data.people.map(p=>p.unit.team).filter(Boolean))].sort(),statuses=[...new Set(data.people.map(p=>p.unit.status).filter(Boolean))].sort();
       const missing=p?.missing_blocks?.length?'<div class="hr-note">В БД не найдены блоки этой карточки: '+esc(p.missing_blocks.join(', '))+'. Поля этих блоков показаны пустыми. Проверь загрузку штатки.</div>':'';
@@ -134,7 +139,7 @@ globalThis.UbaitHR=(()=>{
         '<div class="hr-layout"><aside class="hr-directory" aria-label="Выбор сотрудника"><div class="hr-directory-top"><div class="hr-directory-label"><span>Карточки</span><span>'+people.length+' / '+data.people.length+'</span></div><input id="hr-person-search" type="search" class="hr-search" placeholder="ФИО или ID…" aria-label="Найти сотрудника" value="'+esc(state.query)+'">'+select('department','Отдел',departments,state.department,true)+select('status','Статус',statuses,state.status,true)+'</div><div class="hr-directory-list">'+(people.map(p=>'<button class="hr-person" data-hr-person="'+esc(p.unit.task_id)+'" aria-pressed="'+(state.person===p.unit.task_id)+'"><span class="hr-avatar" aria-hidden="true">'+initials(p.unit.staff||p.unit.status)+'</span><span><strong>'+esc(title(p))+'</strong><small>'+esc([p.unit.team,p.unit.grade].filter(Boolean).join(' · ')||'Без отдела / грейда')+'</small><small>'+esc(p.unit.status||'Без статуса')+' · #'+esc(p.unit.task_id)+'</small></span></button>').join('')||'<p class="hr-source">Нет совпадений</p>')+'</div><footer class="hr-directory-footer">'+data.references.length+' эталонов · отдел из unit.team<br>Изменено в Pyrus: '+esc(timestamp(data.meta.last_source_update))+'</footer></aside><div class="hr-detail">'+
         (p?'<header class="hr-identity"><span class="hr-avatar" aria-hidden="true">'+initials(p.unit.staff||p.unit.status)+'</span><div><h2>'+esc(title(p))+'</h2><p>'+esc([p.unit.position,p.unit.team].filter(Boolean).join(' · '))+' · <a href="https://pyrus.sovcombank.ru/t#id'+p.unit.task_id+'" target="_blank" rel="noopener noreferrer">#'+p.unit.task_id+' ↗</a></p></div><div class="hr-identity-tags">'+pill(p.unit.grade||'Грейд не указан','accent')+pill(p.unit.status||'Без статуса')+'</div></header>':'')+
         '<section id="hr-tab-content" class="hr-content" role="tabpanel" aria-labelledby="hr-'+state.tab+'-tab">'+
-        (!p?'<div class="hr-empty"><h3>'+(!data.people.length?'В БД нет карточек сотрудников':'Сотрудник не выбран')+'</h3><p>'+(!data.people.length?'Загрузи штатный реестр 405691. Эталонные карточки не считаются сотрудниками.':'Измени поиск или фильтры отдела и статуса.')+'</p></div>':missing+same+(state.tab==='competencies'?competencies(p,data,state):state.tab==='kpi'?kpi(p,state):state.tab==='ipr'?ipr(p,state):employee(p)))+
+        (!p?'<div class="hr-empty"><h3>'+(!data.people.length?'В БД нет карточек сотрудников':'Сотрудник не выбран')+'</h3><p>'+(!data.people.length?'Загрузи штатный реестр 405691. Эталонные карточки не считаются сотрудниками.':awaitingPerson?'Вашему ФИО соответствуют несколько карточек HR. Выберите нужную в списке — автоматическая связь не установлена.':'Измени поиск или фильтры отдела и статуса.')+'</p></div>':missing+same+(state.tab==='competencies'?competencies(p,data,state):state.tab==='kpi'?kpi(p,state):state.tab==='ipr'?ipr(p,state):employee(p)))+
         '</section></div></div><dialog id="hr-skill-dialog" class="hr-dialog" aria-labelledby="hr-skill-title"><div class="dialog-top"><span class="hr-source">Профиль навыка</span><button class="action" data-hr-close="true">Закрыть</button></div><div class="detail-body" id="hr-skill-body"></div></dialog>';
       if(focusId){const el=root.querySelector('#'+focusId);el?.focus({preventScroll:true});if(selection&&el?.setSelectionRange)el.setSelectionRange(...selection);}
     }
@@ -143,10 +148,15 @@ globalThis.UbaitHR=(()=>{
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),70000);
       try{
         const response=await fetch('/api/hr',{headers:{Accept:'application/json'},cache:'no-store',signal:controller.signal});
+        if(globalThis.UbaitAuth)await UbaitAuth.checked(response);
         let payload;try{payload=await response.json();}catch{throw new Error('Сервер HR вернул не JSON. Проверь публикацию флоу HR.');}
         if(!response.ok)throw new Error(response.status===404?'На сайте ещё старая сборка: отсутствует /api/hr. Загрузи пакет R6 целиком.':payload.error||'HR API: HTTP '+response.status+'.');
         const loaded=parsePayload(payload);data=loaded;
-        if(!state.person){state.person=data.people[0]?.unit.task_id??'';state.reference=defaultReference(person(),data);}
+        if(!state.person){
+          const account=await globalThis.UbaitAuth?.user.catch(()=>null),match=matchEmployee(data,account?.full_name);
+          awaitingPerson=match.status==='ambiguous';
+          state.person=awaitingPerson?'':match.card?.unit.task_id??data.people[0]?.unit.task_id??'';state.reference=defaultReference(person(),data);
+        }
         if(state.reference&&!data.references.some(r=>r.unit.task_id===state.reference))state.reference='';
       }catch(e){error=e.name==='AbortError'?'HR не ответил за 70 секунд. Проверь выполнение флоу HR в n8n.':e.message;}
       finally{clearTimeout(timer);loading=false;render();}
@@ -164,7 +174,7 @@ globalThis.UbaitHR=(()=>{
       if(d.hrSkill){skillDialog(d.hrSkill);return;}
       if(d.hrOpenIpr){state.tab='ipr';state.iprQuery=d.hrOpenIpr;render('hr-ipr-tab');return;}
       if(d.hrTab&&Object.hasOwn(tabs,d.hrTab)){state.tab=d.hrTab;render('hr-'+d.hrTab+'-tab');return;}
-      if(d.hrPerson){state.person=d.hrPerson;state.reference=defaultReference(person(),data);state.goalQuery='';state.iprQuery='';state.horizon='';render();return;}
+      if(d.hrPerson){awaitingPerson=false;state.person=d.hrPerson;state.reference=defaultReference(person(),data);state.goalQuery='';state.iprQuery='';state.horizon='';render();return;}
       if(d.hrKind&&definitions[d.hrKind])state.kind=d.hrKind;
       else if(d.hrReference&&data.references.some(r=>r.unit.task_id===d.hrReference))state.reference=d.hrReference;
       else if(d.hrFilter&&['year','horizon','department','status'].includes(d.hrFilter)){state[d.hrFilter]=d.value??'';if(d.hrFilter==='year')state.horizon='';}
@@ -174,5 +184,5 @@ globalThis.UbaitHR=(()=>{
     root.addEventListener('keydown',e=>{if(!data)return;const tab=e.target.closest('[data-hr-tab]');if(!tab)return;const keys=Object.keys(tabs),index=keys.indexOf(state.tab);let next;if(e.key==='ArrowRight')next=keys[(index+1)%keys.length];if(e.key==='ArrowLeft')next=keys[(index+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();state.tab=next;render('hr-'+next+'-tab');}});
     void load();
   }
-  return {mount,parsePayload,comparison,countSkills,goalSummary,gradeIndex,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel};
+  return {mount,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel};
 })();
