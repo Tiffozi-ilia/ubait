@@ -8,7 +8,7 @@ import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 
-export const BUILD_VERSION='2026.10.29-v2.1';
+export const BUILD_VERSION='2026.10.30-v2.2';
 
 export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_URL, fetchImpl=fetch, now=Date.now, cacheMs=15000}={}) {
   let cache=null, pending=null;
@@ -50,10 +50,14 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
       if(url.pathname==='/api/story-map'){
         const body=await upstream();res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:body);
       }
+      if(['/errors.js','/stat.js'].includes(url.pathname)){
+        const source=await readFile(new URL('.'+url.pathname,import.meta.url),'utf8');
+        res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:source);
+      }
       if(url.pathname!=='/' && url.pathname!=='/index.html')return json(404,{error:'Не найдено.'});
       const html=await readFile(htmlPath,'utf8');
       const scriptHashes=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].map(m=>`'sha256-${createHash('sha256').update(m[1]).digest('base64')}'`).join(' ');
-      res.setHeader('Content-Security-Policy',`default-src 'none'; script-src ${scriptHashes}; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`);
+      res.setHeader('Content-Security-Policy',`default-src 'none'; script-src 'self' ${scriptHashes}; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`);
       res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(req.method==='HEAD'?undefined:html);
     }catch(error){
       const message=error.name==='AbortError'?'n8n не ответил за 65 секунд. Проверьте Executions в n8n.':error.message;
