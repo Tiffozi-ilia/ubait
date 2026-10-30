@@ -33,5 +33,5 @@ for(let i=0;i<60&&!closing;i++){
 if(!ready){console.error('PocketBase did not become ready.');stop(1);}
 else{
  server=createStoryMapServer();server.on('error',()=>stop(1));
- server.listen(8080,'0.0.0.0',()=>console.log('UBAIT R7 ready on port 8080; authentication required.'));
+ server.listen(8080,'0.0.0.0',()=>console.log('UBAIT R8 ready on port 8080; authentication and HR authorization required.'));
 }

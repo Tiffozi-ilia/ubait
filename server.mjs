@@ -8,8 +8,9 @@ import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {createAuth} from './auth.mjs';
+import {authorizeHr} from './hr-access.mjs';
 
-export const BUILD_VERSION='2026.10.30-v2.5';
+export const BUILD_VERSION='2026.10.30-v2.6';
 
 export function hrWebhookAddress(mapAddress){
   if(!mapAddress)throw Object.assign(new Error('В Amvera не задана переменная STORY_MAP_WEBHOOK_URL.'),{status:503});
@@ -87,7 +88,11 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
       }
       if(url.pathname==='/api/hr'){
         res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');
-        const body=await hrUpstream();res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:body);
+        res.setHeader('Vary','Cookie');
+        // The shared snapshot NEVER leaves the server. Reauthorize each response
+        // for the freshly validated PocketBase identity, including cache hits.
+        const body=JSON.stringify(authorizeHr(JSON.parse(await hrUpstream()),user));
+        res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:body);
       }
       if(['/errors.js','/stat.js','/hr.js','/hr.css','/auth-client.js'].includes(url.pathname)){
         const source=await readFile(new URL('.'+url.pathname,import.meta.url),'utf8');
