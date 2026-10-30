@@ -1,4 +1,4 @@
-/* HR R6. Live read-only personnel data */
+/* HR R6. Live read-only personnel data! */
 .hr-live{margin-left:auto;align-self:center;color:var(--hr-teal);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 #hr-view .hr-refresh{font-size:18px;padding:0 10px;flex-shrink:0}
 .hr-loading{flex:1;align-content:center;gap:15px}
