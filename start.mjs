@@ -10,7 +10,7 @@ if(!/^[A-Za-z0-9_-]{32,256}$/.test(process.env.N8N_WEBHOOK_SECRET||''))throw new
 let target;try{target=new URL(process.env.STORY_MAP_WEBHOOK_URL);}catch{throw new Error('Set STORY_MAP_WEBHOOK_URL to the existing HTTPS Story Map webhook.');}
 if(target.protocol!=='https:'||target.username||target.password||!target.pathname.endsWith('/reestr-story-map-v1'))throw new Error('Set STORY_MAP_WEBHOOK_URL to the existing HTTPS Story Map webhook.');
 await checkWebhookProtection(target.href);
-const binary='/usr/local/bin/pocketbase',args=['--dir=/data/pocketbase','--migrationsDir=/app/pb_migrations','--automigrate=false'];
+const binary='/usr/local/bin/pocketbase',args=['--dir=/data/pocketbase','--migrationsDir=/app/pb_migrations','--hooksDir=/app/pb_hooks','--automigrate=false'];
 const init=spawn(binary,['migrate','up',...args],{stdio:'inherit'});
 const [code]=await once(init,'exit');if(code!==0)throw new Error('PocketBase initialization failed. Check /data and initial administrator secrets.');
 const pbEnv={...process.env};delete pbEnv.PB_ADMIN_PASSWORD;delete pbEnv.PB_ADMIN_EMAIL;

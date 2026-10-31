@@ -11,7 +11,7 @@ export function publicOrigin(value,{development=false}={}){
 export function createAuth({origin,fetchImpl=fetch,now=Date.now,pbPort=8090,development=false}={}){
   const site=publicOrigin(origin,{development});
   const cookieName=development?'ubait_dev_session':'__Host-ubait_session';
-  const sessions=new Map(),attempts=new Map();let inFlightLogins=0;
+  const sessions=new Map(),attempts=new Map(),passwordChanges=new Set();let inFlightLogins=0;
   const cookie=(v,age)=>`${cookieName}=${v}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${development?'':'; Secure'}`;
   const clear=res=>res.setHeader('Set-Cookie',cookie('',0));
   const sessionKey=req=>{
@@ -25,7 +25,14 @@ export function createAuth({origin,fetchImpl=fetch,now=Date.now,pbPort=8090,deve
     const r=attempts.get(key)||{count:0,until:now()+windowMs};r.count++;attempts.set(key,r);
     if(r.count>limit)throw error(429,'Слишком много попыток. Повторите позже.');
   }
-  function sameOrigin(req){if(req.headers.origin!==site||req.headers['sec-fetch-site']==='cross-site')throw error(403,'Запрос разрешён только со страницы входа этого сайта.');}
+  function sameOrigin(req){if(req.headers.origin!==site||req.headers['sec-fetch-site']==='cross-site')throw error(403,'Запрос разрешён только со страницы этого сайта.');}
+  async function readJson(req){
+    if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||''))throw error(415,'Нужен JSON-запрос.');
+    let size=0;const chunks=[];for await(const chunk of req){size+=chunk.length;if(size>8192)throw error(413,'Слишком большой запрос.');chunks.push(chunk);}
+    let data;try{data=JSON.parse(Buffer.concat(chunks).toString());}catch{throw error(400,'Неверный запрос.');}
+    if(!data||typeof data!=='object'||Array.isArray(data))throw error(400,'Неверный запрос.');
+    return data;
+  }
   async function pbAuth(path,body,token){
     let response;try{response=await fetchImpl(`http://127.0.0.1:${pbPort}/api/collections/app_users/${path}`,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:token}:{})},body:JSON.stringify(body),signal:AbortSignal.timeout(8000),redirect:'error'});}catch{throw error(503,'Сервис входа временно недоступен.');}
     if(!response.ok)throw error(response.status>=500||response.status===429?503:401,response.status>=500?'Сервис входа временно недоступен.':'Неверный логин или пароль, либо доступ отключён.');
@@ -45,9 +52,7 @@ export function createAuth({origin,fetchImpl=fetch,now=Date.now,pbPort=8090,deve
   }
   async function login(req,res){
     sameOrigin(req);
-    if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||''))throw error(415,'Нужен JSON-запрос.');
-    let size=0,chunks=[];for await(const chunk of req){size+=chunk.length;if(size>8192)throw error(413,'Слишком большой запрос.');chunks.push(chunk);}
-    let data;try{data=JSON.parse(Buffer.concat(chunks).toString());}catch{throw error(400,'Неверный запрос.');}
+    const data=await readJson(req);
     if(typeof data.username!=='string'||typeof data.password!=='string'||data.username.length>80||data.password.length>1024)throw error(400,'Введите логин и пароль.');
     const username=data.username.trim().toLowerCase();
     rate('all-login',120,600_000);rate('login:'+digest(username),10,900_000);
@@ -60,6 +65,39 @@ export function createAuth({origin,fetchImpl=fetch,now=Date.now,pbPort=8090,deve
     res.setHeader('Set-Cookie',cookie(value,8*3600));return {ok:true};
   }
   function logout(req,res){sameOrigin(req);sessions.delete(sessionKey(req));clear(res);res.setHeader('Clear-Site-Data','"cache"');return {ok:true};}
+  async function changePassword(req,res){
+    sameOrigin(req);
+    const user=await requireUser(req,res);
+    rate('password:'+user.id,8,900_000);rate('all-password',60,900_000);
+    const data=await readJson(req),fields=['currentPassword','newPassword','confirmPassword'];
+    if(Object.keys(data).some(k=>!fields.includes(k))||fields.some(k=>typeof data[k]!=='string'||!data[k].length||data[k].length>1024))throw error(400,'Заполните три поля пароля.');
+    if(data.newPassword!==data.confirmPassword)throw error(400,'Новый пароль и повтор не совпадают.');
+    if(data.newPassword===data.currentPassword)throw error(400,'Новый пароль должен отличаться от текущего.');
+    if(passwordChanges.has(user.id)||passwordChanges.size>=4)throw error(429,'Смена пароля уже выполняется. Повторите позже.');
+    const s=sessions.get(sessionKey(req));if(!s)throw error(401,'Сеанс завершён. Войдите снова.');
+    const revoke=()=>{for(const[k,v]of sessions)if(v.record.id===user.id)sessions.delete(k);clear(res);res.setHeader('Clear-Site-Data','"cache"');};
+    passwordChanges.add(user.id);
+    try{
+      let response;
+      try{response=await fetchImpl(`http://127.0.0.1:${pbPort}/api/ubait/change-password`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:s.token},body:JSON.stringify(data),signal:AbortSignal.timeout(12000),redirect:'error'});}
+      catch{revoke();throw error(503,'Не удалось подтвердить смену пароля. Войдите снова; если новый пароль не подходит, используйте прежний.');}
+      if(response.status===401||response.status===403){revoke();throw error(401,'Сеанс завершён. Войдите снова.');}
+      if(!response.ok){
+        if(response.status===400){
+          const result=await response.json().catch(()=>({}));
+          const messages={invalid_current_password:'Текущий пароль неверный.',password_mismatch:'Новый пароль и повтор не совпадают.',same_password:'Новый пароль должен отличаться от текущего.'};
+          if(messages[result.code])throw error(400,messages[result.code]);
+          if(result.code==='password_policy'){
+            const min=Number.isInteger(result.minLength)&&result.minLength>0&&result.minLength<=1024?` Минимальная длина: ${result.minLength} символов.`:'';
+            throw error(400,'Новый пароль не соответствует требованиям, заданным администратором.'+min);
+          }
+        }
+        throw error(503,'Смена пароля временно недоступна.');
+      }
+      // Token rotation in PocketBase also revokes sessions held by other processes.
+      revoke();return {ok:true};
+    }finally{passwordChanges.delete(user.id);}
+  }
   // No arbitrary URL forwarding. PocketBase's own rules protect admin APIs.
   function isAdminRoute(path){return path==='/_/'||path.startsWith('/_/')||/^\/api\/(collections|settings|logs|backups|crons|health|realtime|files|batch|sql)(\/|$)/.test(path);}
   async function proxyAdmin(req,res,url){
@@ -83,5 +121,5 @@ export function createAuth({origin,fetchImpl=fetch,now=Date.now,pbPort=8090,deve
       res.on('close',()=>upstream.destroy());req.pipe(upstream);
     });
   }
-  return {requireUser,login,logout,isAdminRoute,proxyAdmin};
+  return {requireUser,login,logout,changePassword,isAdminRoute,proxyAdmin};
 }

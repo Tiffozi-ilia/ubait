@@ -1,4 +1,5 @@
 'use strict';
+if(new URLSearchParams(location.search).get('password')==='changed')document.querySelector('.lead').textContent='Пароль изменён. Войдите с новым паролем.';
 document.getElementById('login-form').addEventListener('submit',async e=>{
   e.preventDefault();const form=e.currentTarget,button=form.querySelector('button'),message=document.getElementById('login-error');
   button.disabled=true;button.textContent='Входим…';message.hidden=true;

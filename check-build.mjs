@@ -18,5 +18,7 @@ for(const text of ['Год проектов','Период историй','id="
   assert(html.includes(text),`Current UI is missing: ${text}`);
 }
 assert(!html.includes('<select'),'Old native-select interface must not be packaged.');
+assert(html.includes('id="change-password"')&&html.includes('id="password-form"'),'Missing password change dialog.');
+new Script(await readFile(new URL('./pb_hooks/ubait-password.pb.js',import.meta.url),'utf8'),{filename:'ubait-password.pb.js'});
 assert(html.includes('href="/hr.css"'));assert((await readFile(new URL('./hr.css',import.meta.url),'utf8')).includes('.hr-subnav'));
 console.log(`Build verified: Story Map ${BUILD_VERSION}`);

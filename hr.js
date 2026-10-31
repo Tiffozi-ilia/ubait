@@ -13,6 +13,11 @@ globalThis.UbaitHR=(()=>{
   const scale=['C −','C','C +','B −','B','B +','A −','A','A +'];
   const gradeIndex=v=>{const s=String(v??'').trim().replace(/[АВС]/g,c=>({'А':'A','В':'B','С':'C'}[c])).replace(/[−–]/g,'-').replace(/\s+/g,'');return ['C-','C','C+','B-','B','B+','A-','A','A+'].indexOf(s);};
   const label=v=>gradeIndex(v)<0?'—':scale[gradeIndex(v)];
+  // Matrix supplied by the user: non-linear points, AS IS only.
+  const points=[.5,.75,1,1.5,1.75,2,2.5,2.75,3];
+  const gradePoints=v=>gradeIndex(v)<0?null:points[gradeIndex(v)];
+  const careerGrades=['Юнлинг','Падаван','Джедай','Магистр'];
+  const norm=v=>String(v??'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ');
   const definitions={employee:[
     {name:'Аналитическое мышление',icon:'◇',short:'Мышление',items:[['01.01','Решение проблем и принятие решений'],['01.02','Системное мышление'],['01.03','Визуальное мышление'],['01.04','Творческое мышление'],['01.06','Концептуальное мышление']]},
     {name:'Предметная область',icon:'◎',short:'Знания',items:[['02.01','Знание отрасли'],['02.02','Внутренняя методология и стандарты'],['02.03','Знание организации'],['02.04','Знание решения']]},
@@ -94,10 +99,52 @@ globalThis.UbaitHR=(()=>{
     const n=groups.length,points=groups.map((g,i)=>{const angle=-Math.PI/2+i*2*Math.PI/n;return {x:100+67*Math.cos(angle),y:85+61*Math.sin(angle),g};});
     return `<svg class="hr-orbit" viewBox="0 0 200 170" role="img" aria-label="Оценено ${stats.assessed} из ${stats.total} компетенций"><circle cx="100" cy="85" r="62" fill="none" stroke="var(--line)" stroke-dasharray="2 5"/>${points.map(({x,y,g})=>{const c=countSkills([g]);return `<line x1="100" y1="85" x2="${x}" y2="${y}" stroke="var(--line)"/><circle cx="${x}" cy="${y}" r="19" fill="var(--paper)" stroke="var(--hr-violet)" stroke-width="1.5"/><text x="${x}" y="${y+3}" text-anchor="middle">${c.assessed}/${c.total}</text><text class="hr-orbit-small" x="${x}" y="${y+30}" text-anchor="middle">${esc(g.short)}</text>`;}).join('')}<circle cx="100" cy="85" r="28" fill="var(--hr-soft)"/><text class="hr-orbit-total" x="100" y="86" text-anchor="middle">${stats.assessed}</text><text class="hr-orbit-small" x="100" y="101" text-anchor="middle">оценено</text></svg>`;
   }
-  function competencies(person,data,state){
+  function competenciesBase(person,data,state){
     const ref=data.references.find(r=>r.unit.task_id===state.reference),groups=comparison(person,ref,state.kind),stats=countSkills(groups);
     const record=person['skills_'+state.kind]??{};
     return `<div class="hr-panel-top"><div class="hr-switch" role="group" aria-label="Набор компетенций">${[['employee','Сотрудник'],['boss','Руководитель']].map(([k,t])=>`<button data-hr-kind="${k}" aria-pressed="${state.kind===k}">${t}</button>`).join('')}</div><span class="hr-source">Шкала C − → A + · нажми на навык для деталей</span></div><div class="hr-competency-layout"><div><div class="hr-skill-grid">${groups.map(g=>{const s=countSkills([g]);return `<section class="hr-card hr-skill-group"><header><span class="hr-skill-icon" aria-hidden="true">${g.icon}</span><div><h3>${esc(g.name)}</h3><small>Оценено ${s.assessed} из ${s.total}</small></div></header>${g.items.map(s=>`<button class="hr-skill" data-hr-skill="${s.code}" aria-label="${esc(s.name)}. Сейчас ${label(s.current)}, план ${label(s.target)}, эталон ${label(s.reference)}"><span class="hr-skill-heading"><span>${esc(s.name)}</span><b>${label(s.current)}</b></span>${levelBar(s)}</button>`).join('')}</section>`;}).join('')}</div><div class="hr-skill-legend"><span><i class="hr-key"></i>Текущая оценка</span><span><i class="hr-key target"></i>План сотрудника</span><span><i class="hr-key reference"></i>Эталон грейда</span></div><p class="hr-source">Не заполнено — не равно C −. План и эталон не заменяют текущую оценку.</p></div><aside class="hr-card hr-benchmark"><span class="hr-kicker">Ориентир развития</span><h3>${esc(referenceLabel(ref,data))}</h3><p>Сравни профиль с эталоном грейда. Выбор ориентира не меняет грейд сотрудника.</p><div class="hr-grade-choices" role="group" aria-label="Эталон грейда">${data.references.length?data.references.map(r=>`<button data-hr-reference="${esc(r.unit.task_id)}" aria-pressed="${state.reference===r.unit.task_id}">${esc(referenceLabel(r,data))}</button>`).join(''):'<p>В БД нет карточек со статусом «Эталон».</p>'}</div>${constellation(groups,stats)}<div class="hr-benchmark-numbers"><div><strong>${stats.met}<small>из ${stats.comparable} сопоставимых</small></strong><small>не ниже ориентира</small></div><div><strong>${stats.planned}</strong><small>с плановой оценкой</small></div></div><div class="hr-divider"></div><p>Это сравнение отдельных навыков, не рейтинг людей и не расчёт премии.</p><div class="hr-divider"></div>${detailsRows([['Балл из реестра',fmt(record['score_sum_asis_'+state.kind])],['Коэф. грейда',fmt(record['cost_ratio_'+state.kind])]])}<p class="hr-source" style="margin-top:12px">Эталоны — только карточки со статусом «Эталон».</p></aside></div>`;
+  }
+  function scoreProfile(person,kind){
+    const record=person?.['skills_'+kind]??{},values=allSkills(kind).map(s=>gradePoints(record[s.code+'_current']));
+    const assessed=values.filter(v=>v!==null),complete=assessed.length===values.length;
+    const subtotal=assessed.reduce((s,v)=>s+v,0),stored=num(record['score_sum_asis_'+kind]);
+    return {total:complete?subtotal:null,subtotal,assessed:assessed.length,count:values.length,stored,mismatch:complete&&stored!==null&&Math.abs(stored-subtotal)>.005};
+  }
+  function development(person,data,kind){
+    const current=scoreProfile(person,kind),grade=person.unit.grade||'',at=careerGrades.findIndex(g=>norm(g)===norm(grade));
+    const find=g=>{const matches=g?data.references.filter(r=>norm(r.unit.grade)===norm(g)):[];return {card:matches.length===1?matches[0]:null,count:matches.length};};
+    const baseline=find(grade),nextGrade=at>=0?careerGrades[at+1]||'':'',next=find(nextGrade);
+    const reference=scoreProfile(baseline.card,kind),nextReference=scoreProfile(next.card,kind);
+    const rows=comparison(person,baseline.card,kind).flatMap(g=>g.items).map(s=>({...s,actualPoints:gradePoints(s.current),referencePoints:gradePoints(s.reference)}));
+    const comparable=rows.filter(s=>s.actualPoints!==null&&s.referencePoints!==null);
+    const gaps=comparable.filter(s=>s.actualPoints<s.referencePoints).map(s=>({...s,gap:s.referencePoints-s.actualPoints})).sort((a,b)=>b.gap-a.gap||a.code.localeCompare(b.code));
+    const noGaps=comparable.length===rows.length?gaps.length===0:gaps.length?false:null;
+    const enough=current.total!==null&&nextReference.total!==null?current.total>=nextReference.total:null;
+    const transition=!nextGrade?'none':enough===false||noGaps===false?'blocked':enough===true&&noGaps===true?'met':'unknown';
+    return {grade,knownGrade:at>=0,nextGrade,current,baseline,reference,next,nextReference,rows,comparable:comparable.length,gaps,noGaps,enough,transition};
+  }
+  function developmentSummary(person,data,kind){
+    const d=development(person,data,kind),delta=d.current.total!==null&&d.reference.total!==null?d.current.total-d.reference.total:null;
+    const baselineIssue=!d.grade?'У сотрудника не указан грейд.':d.baseline.count>1?'Несколько эталонов текущего грейда — однозначное сравнение невозможно.':!d.baseline.card?'Не найден эталон текущего грейда.':d.reference.total===null?'В эталоне заполнены не все оценки AS IS.':'';
+    const currentText=d.current.total===null?'Нет полного расчёта':delta===null?'Нет полного эталона':delta<0?'До эталона: '+fmt(-delta)+' балл.':delta===0?'Сумма равна эталону':'Выше эталона на '+fmt(delta)+' балл.';
+    const nextText=d.transition==='met'?'Два числовых условия выполнены':d.transition==='blocked'?'Условия перехода пока не выполнены':d.transition==='unknown'?'Недостаточно данных для проверки':d.knownGrade?'В матрице нет следующего грейда':'Следующий грейд не определён';
+    const condition=(value,text,detail)=>`<li class="${value===true?'met':value===false?'gap':'unknown'}"><span aria-hidden="true">${value===true?'✓':value===false?'○':'?'}</span><div>${text}<small>${detail}</small></div></li>`;
+    return `<section class="hr-card hr-score-panel" aria-label="Баллы AS IS и условия перехода"><div class="hr-score-overview"><div class="hr-score-main"><span class="hr-kicker">Текущий балл · AS IS</span><div class="hr-score-value"><strong>${fmt(d.current.total)}</strong><span>/ ${fmt(d.reference.total)}</span></div><span class="hr-source">Эталон текущего грейда · ${esc(d.grade||'не указан')}</span><b class="hr-score-delta">${esc(currentText)}</b>${d.current.total===null?`<p class="hr-source">Оценено ${d.current.assessed} из ${d.current.count}. По заполненным: ${fmt(d.current.subtotal)} балл. — не полный итог.</p>`:''}${baselineIssue?`<p class="hr-source">${baselineIssue}</p>`:''}</div><div class="hr-score-gaps"><span class="hr-kicker">Гепы к текущему грейду</span><strong>${d.comparable===d.rows.length||d.gaps.length?d.gaps.length:'—'}</strong><span class="hr-source">${d.comparable===d.rows.length?'Проверены все '+d.rows.length+' компетенции':'Сопоставлено '+d.comparable+' из '+d.rows.length+'; пропуски не равны нулю'}</span><p class="hr-source">Высокая сумма не компенсирует гепы для перехода на следующий грейд.</p></div><div class="hr-score-next"><span class="hr-kicker">Следующий грейд${d.nextGrade?' · '+esc(d.nextGrade):''}</span><b>${nextText}</b>${d.nextGrade?`<ul>${condition(d.enough,'AS IS не ниже порога следующего грейда',fmt(d.current.total)+' / '+fmt(d.nextReference.total)+' балл.'+(d.next.count>1?' · несколько эталонов':!d.next.card?' · эталон не найден':''))}${condition(d.noGaps,'Нет гепов к текущему грейду',d.noGaps===true?'Все компетенции не ниже текущего эталона':d.gaps.length?'Открыто гепов: '+d.gaps.length:'Есть несопоставленные оценки')}</ul>`:''}<p class="hr-source">Это проверка числовых условий, не присвоение грейда. Итоговый скоринг и решение — после обсуждения проявленности.</p></div></div><details class="hr-score-details"><summary>Разрывы и расчёт по матрице${d.gaps.length?' · '+d.gaps.length+' гепов':''}</summary><div class="hr-score-details-body">${d.gaps.length?`<p class="hr-source">К текущему грейду, от большего разрыва к меньшему. Нажми на компетенцию для деталей и ИПР.</p><div class="hr-gap-list">${d.gaps.map(s=>`<button data-hr-skill="${s.code}" data-hr-skill-reference="${esc(d.baseline.card.unit.task_id)}"><span>${esc(s.name)}</span><span>${label(s.current)} → ${label(s.reference)}</span><strong>−${fmt(s.gap)} б.</strong></button>`).join('')}</div>`:`<p class="hr-source">${d.noGaps===true?'Гепов к текущему грейду нет. Можно обсуждать цель дальнейшего развития.':'Полнота оценок не позволяет подтвердить отсутствие гепов.'}</p>`}<div class="hr-point-scale" aria-label="Баллы уровней">${scale.map((v,i)=>`<span>${v}<b>${fmt(points[i])}</b></span>`).join('')}</div><p class="hr-source">AS IS — сумма текущих оценок в выбранной матрице. TO BE, отметки «&gt;&gt;&gt;» и оценки в годовом ИПР не участвуют. C = 0,75: это может означать недостаточную проявленность, а не «не умеет». Пустая оценка остаётся неизвестной.</p>${d.current.mismatch||d.reference.mismatch||d.nextReference.mismatch?`<p class="hr-source hr-score-warning">Сумма AS IS по шкале отличается от сохранённого итога в реестре.${d.current.mismatch?' Сотрудник: '+fmt(d.current.total)+' по оценкам / '+fmt(d.current.stored)+' в реестре.':''}${d.reference.mismatch?' Текущий эталон: '+fmt(d.reference.total)+' / '+fmt(d.reference.stored)+'.':''}${d.nextReference.mismatch?' Следующий эталон: '+fmt(d.nextReference.total)+' / '+fmt(d.nextReference.stored)+'.':''} Здесь показан расчёт по оценкам, данные БД не изменены.</p>`:''}<p class="hr-source">Данные не содержат отдельных этапов самооценки и итогового скоринга; текущая оценка не объявляется автоматически подтверждённой. Переход грейда и индексация — разные решения. Рыночная база и региональный коэффициент не заданы: сумму индексации не рассчитываем.</p></div></details></section>`;
+  }
+  function competencies(person,data,state){
+    // Additive: existing cards, scales, comparison selector and infographic stay intact.
+    return competenciesBase(person,data,state).replace('<div class="hr-competency-layout">',developmentSummary(person,data,state.kind)+'<div class="hr-competency-layout">');
+  }
+  // Only exact known competency names/aliases link IPR rows; never fuzzy matches.
+  function iprSkillCode(row){
+    const aliases={'Знание внутренней методологии и стандартов':'Внутренняя методология и стандарты','Инструменты формализации Требований':'Формализация требований'};
+    const name=norm(row.skill),alias=Object.entries(aliases).find(([from])=>norm(from)===name)?.[1];
+    const matches=['employee','boss'].flatMap(allSkills).filter(s=>norm(s.name)===norm(alias||name));
+    return matches.length===1?matches[0].code:null;
+  }
+  function skillEvidence(person,skill,year){
+    const rows=person.skills.filter(r=>!r.is_empty&&yearMatches(r.skills_year,year)&&iprSkillCode(r)===skill.code);
+    return `<section class="hr-evidence"><h4>Проявленность · ИПР ${esc(yearLabel(year)||'все годы')}</h4><p class="hr-source">Ниже — записанные результаты и обратная связь, не автоматическое подтверждение оценки.</p>${rows.length?rows.map(r=>`<details><summary>${esc(yearLabel(yearKey(r.skills_year)))} · AS IS ${label(r.skill_asis)} → TO BE ${label(r.skill_tobe)} · ${r.skill_result_done?'результат описан':'результат не заполнен'}</summary>${prose('Что сделано',r.skill_result_done)}${prose('Обратная связь руководителя',r.skill_feedback)}</details>`).join(''):'<p class="hr-source">Связанный пункт ИПР за этот период не найден по точному названию компетенции. Это не означает отсутствия проявленности.</p>'}<p class="hr-source">Для итогового скоринга нужны рабочие примеры и наблюдаемые результаты. Подробные критерии проявленности этого навыка пока не подключены; сверяй примеры с матрицей компетенций.</p></section>`;
   }
   function kpi(person,state){
     const all=person.kpi.filter(r=>!r.is_empty),years=[...new Set([yearNow(),...all.map(r=>yearKey(r.kpi_year))])].sort().reverse();
@@ -164,9 +211,10 @@ globalThis.UbaitHR=(()=>{
       }catch(e){data=null;lastContent='';state.person='';state.reference='';error=e.name==='AbortError'?'HR не ответил за 70 секунд. Проверь выполнение флоу HR в n8n.':e.message;}
       finally{clearTimeout(timer);loading=false;if(!background||changed||error)render();}
     }
-    function skillDialog(code){
-      const p=person(),ref=data.references.find(r=>r.unit.task_id===state.reference),skill=comparison(p,ref,state.kind).flatMap(g=>g.items).find(s=>s.code===code);if(!skill)return;
-      root.querySelector('#hr-skill-body').innerHTML='<span class="hr-kicker">'+(state.kind==='boss'?'Руководитель':'Сотрудник')+' · '+esc(referenceLabel(ref,data))+'</span><h3 id="hr-skill-title">'+esc(skill.name)+'</h3>'+detailsRows([['Текущая оценка',label(skill.current)],['План сотрудника',label(skill.target)],['Эталон '+referenceLabel(ref,data),label(skill.reference)]])+'<div class="hr-dialog-levels" aria-hidden="true">'+scale.map((g,i)=>'<span class="'+(i===gradeIndex(skill.current)?'chosen ':'')+(i===gradeIndex(skill.reference)?'reference':'')+'">'+g+'</span>').join('')+'</div><p class="hr-source">Фиолетовый — текущая оценка, золотая линия — выбранный эталон. План взят отдельно; грейд и выплаты автоматически не меняются.</p><div class="hr-divider"></div><button class="action" data-hr-open-ipr="'+esc(skill.name)+'">Найти в годовом ИПР →</button>';
+    function skillDialog(code,referenceId=state.reference){
+      const p=person(),ref=data.references.find(r=>r.unit.task_id===referenceId),skill=comparison(p,ref,state.kind).flatMap(g=>g.items).find(s=>s.code===code);if(!skill)return;
+      root.querySelector('#hr-skill-body').innerHTML='<span class="hr-kicker">'+(state.kind==='boss'?'Руководитель':'Сотрудник')+' · '+esc(referenceLabel(ref,data))+'</span><h3 id="hr-skill-title">'+esc(skill.name)+'</h3>'+detailsRows([['Текущая оценка',label(skill.current)],['План сотрудника',label(skill.target)],['Эталон '+referenceLabel(ref,data),label(skill.reference)],['Балл AS IS',fmt(gradePoints(skill.current))],['Балл эталона',fmt(gradePoints(skill.reference))]])+'<div class="hr-dialog-levels" aria-hidden="true">'+scale.map((g,i)=>'<span class="'+(i===gradeIndex(skill.current)?'chosen ':'')+(i===gradeIndex(skill.reference)?'reference':'')+'">'+g+'</span>').join('')+'</div><p class="hr-source">Фиолетовый — текущая оценка, золотая линия — выбранный эталон. План взят отдельно; грейд и выплаты автоматически не меняются.</p><div class="hr-divider"></div><button class="action" data-hr-open-ipr="'+esc(skill.name)+'">Найти в годовом ИПР →</button>';
+      root.querySelector('#hr-skill-body').innerHTML+=skillEvidence(p,skill,state.year);
       root.querySelector('#hr-skill-dialog').showModal();
     }
     root.addEventListener('click',e=>{
@@ -174,7 +222,7 @@ globalThis.UbaitHR=(()=>{
       if(d.hrRefresh){void load();return;}
       if(!data)return;
       if(d.hrClose){root.querySelector('#hr-skill-dialog').close();return;}
-      if(d.hrSkill){skillDialog(d.hrSkill);return;}
+      if(d.hrSkill){skillDialog(d.hrSkill,d.hrSkillReference);return;}
       if(d.hrOpenIpr){state.tab='ipr';state.iprQuery=d.hrOpenIpr;render('hr-ipr-tab');return;}
       if(d.hrTab&&Object.hasOwn(tabs,d.hrTab)){state.tab=d.hrTab;render('hr-'+d.hrTab+'-tab');return;}
       if(d.hrPerson&&data.people.some(p=>p.unit.task_id===d.hrPerson)){state.person=d.hrPerson;state.reference=defaultReference(person(),data);state.goalQuery='';state.iprQuery='';state.horizon='';render();return;}
@@ -196,5 +244,5 @@ globalThis.UbaitHR=(()=>{
     }
     void load();
   }
-  return {mount,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel};
+  return {mount,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,development,developmentSummary,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel};
 })();

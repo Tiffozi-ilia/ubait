@@ -69,6 +69,7 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
       if(url.pathname==='/healthz'&&['GET','HEAD'].includes(req.method))return json(200,{ok:true,version:BUILD_VERSION});
       if(url.pathname==='/auth/login'&&req.method==='POST')return json(200,await auth.login(req,res));
       if(url.pathname==='/auth/logout'&&req.method==='POST')return json(200,auth.logout(req,res));
+      if(url.pathname==='/auth/change-password'&&req.method==='POST')return json(200,await auth.changePassword(req,res));
       if(auth.isAdminRoute(url.pathname))return await auth.proxyAdmin(req,res,url);
       if(!['GET','HEAD'].includes(req.method)){res.setHeader('Allow','GET, HEAD');return json(405,{error:'Только GET.'});}
       if(['/login','/login.js','/login.css'].includes(url.pathname)){

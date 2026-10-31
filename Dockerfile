@@ -12,6 +12,7 @@ WORKDIR /app
 COPY --from=pocketbase /download/pocketbase /usr/local/bin/pocketbase
 COPY index.html errors.js stat.js hr.js hr.css server.mjs auth.mjs auth-client.js hr-access.mjs login.html login.js login.css start.mjs entrypoint.sh check-build.mjs check-access.mjs ./
 COPY pb_migrations ./pb_migrations
+COPY pb_hooks ./pb_hooks
 RUN chmod +x /usr/local/bin/pocketbase /app/entrypoint.sh \
  && node --check server.mjs && node --check auth.mjs && node --check hr-access.mjs && node --check start.mjs && node check-build.mjs
 ENV NODE_ENV=production
