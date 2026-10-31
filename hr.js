@@ -125,13 +125,28 @@ globalThis.UbaitHR=(()=>{
     }
     flushParagraph();flushList();return html;
   }
+  function descriptionBlocks(markdown){
+    const blocks=[];let title='О компетенции',kind='overview',lines=[];
+    const kinds={'назначение':'purpose','определение':'definition','показатели эффективности':'measures'};
+    const flush=()=>{if(lines.join('\n').trim())blocks.push({title,kind,markdown:lines.join('\n').trim()});lines=[];};
+    for(const line of String(markdown||'').replace(/\r\n?/g,'\n').split('\n')){
+      const heading=line.match(/^\s*(?:#{1,6}\s+)?(?:\*\*|__)?(Назначение|Определение|Показатели эффективности)\s*:?\s*(?:\*\*|__)?\s*$/i);
+      if(heading){flush();title=heading[1];kind=kinds[title.toLocaleLowerCase('ru')];}
+      else lines.push(line);
+    }
+    flush();return blocks;
+  }
   function competencyGuide(doc){
     if(!doc)return '<p class="hr-source">Описание этой компетенции пока не опубликовано.</p>';
     const section=key=>referenceMarkdown(doc[key]?.markdown);
-    const description=section('description'),criteria=section('criteria'),positive=section('positive'),negative=section('negative');
+    const criteria=section('criteria'),positive=section('positive'),negative=section('negative');
+    const blocks=descriptionBlocks(doc.description?.markdown);
     const source=[doc.description,doc.criteria,doc.positive,doc.negative].find(s=>/^\d{1,20}$/.test(s?.page_id??''));
-    return '<section class="hr-competency-guide" aria-label="Описание компетенции"><h4>О компетенции</h4><div class="hr-reference-text">'+(description||'<p>Описание пока не заполнено.</p>')+'</div>'+
-      [['Критерии оценки',criteria],['Положительная проявленность',positive],['Отрицательная проявленность',negative]].filter(([,text])=>text).map(([title,text])=>'<details class="hr-manifestation"><summary>'+title+'</summary><div class="hr-reference-text">'+text+'</div></details>').join('')+
+    const card=(title,text,kind)=>'<section class="hr-doc-card '+kind+'"><h4>'+esc(title)+'</h4><div class="hr-reference-text">'+text+'</div></section>';
+    return '<section class="hr-competency-guide" aria-label="Описание компетенции">'+
+      (blocks.length?blocks.map(b=>card(b.title,referenceMarkdown(b.kind==='definition'?b.markdown.replace(/\n(?=\S)/g,'\n\n'):b.markdown),b.kind)).join(''):card('О компетенции','<p>Описание пока не заполнено.</p>','overview'))+
+      (criteria?card('Критерии оценки',criteria,'criteria'):'')+
+      (positive||negative?'<div class="hr-manifestation-grid">'+(positive?card('Положительная проявленность',positive,'positive'):'')+(negative?card('Отрицательная проявленность',negative,'negative'):'')+'</div>':'')+
       (source?'<a class="hr-reference-link" href="https://confluence.sovcombank.ru/pages/viewpage.action?pageId='+source.page_id+'" target="_blank" rel="noopener noreferrer">Открыть в Confluence ↗</a>':'')+'</section>';
   }
   function createDocsLoader({fetchImpl=(...args)=>fetch(...args)}={}){
@@ -199,6 +214,22 @@ globalThis.UbaitHR=(()=>{
     const gapValue=d.comparable===0?'—':partial?(d.gaps.length?'≥ '+d.gaps.length:'—'):String(d.gaps.length);
     const nextLabel=d.nextGrade||'—',nextNote=!d.nextGrade?(d.knownGrade?'Последний грейд':'Грейд не определён'):d.next.count>1?'Несколько эталонов':!d.next.card?'Эталон не найден':d.nextReference.total===null?'Эталон заполнен не полностью':'баллов эталона';
     return '<section class="hr-score-strip" aria-label="Статистика компетенций"><div class="hr-card hr-score-tile"><span class="hr-kicker">Текущий грейд</span><div class="hr-score-line"><strong class="hr-score-grade">'+esc(d.grade||'Не указан')+'</strong><strong class="hr-score-number">'+fmt(d.current.total)+'</strong></div><span class="hr-score-caption">'+(d.current.total===null?'Оценено '+d.current.assessed+' из '+d.current.count:'баллов AS IS')+'</span></div><div class="hr-card hr-score-tile"><span class="hr-kicker">Следующий грейд</span><div class="hr-score-line"><strong class="hr-score-grade">'+esc(nextLabel)+'</strong><strong class="hr-score-number">'+fmt(d.nextReference.total)+'</strong></div><span class="hr-score-caption">'+nextNote+'</span></div><button class="hr-card hr-score-tile hr-gap-trigger" data-hr-gaps="true" aria-haspopup="dialog" aria-label="Открытые гепы к текущему грейду: '+gapValue+'. Открыть детализацию"><span class="hr-kicker">Гепы к текущему грейду</span><span class="hr-score-line"><strong class="hr-score-number">'+gapValue+'</strong><span class="hr-gap-link">Подробнее ↗</span></span><span class="hr-score-caption">'+(partial?'Сопоставлено '+d.comparable+' из '+d.rows.length:esc(d.grade||'Грейд не указан'))+'</span></button></section>';
+  }
+  function skillProfile(person,data,kind,code){
+    const d=development(person,data,kind),skill=d.rows.find(s=>s.code===code);if(!skill)return null;
+    const note=(ref,value)=>ref.count>1?'Несколько эталонов':!ref.card?'Эталон не найден':gradeIndex(value)<0?'Оценка не заполнена':'';
+    const next=d.next.card?.['skills_'+kind]?.[code+'_current']??null;
+    return {...skill,grade:d.grade,nextGrade:d.nextGrade,next,
+      referenceNote:note(d.baseline,skill.reference),nextNote:d.nextGrade?note(d.next,next):d.knownGrade?'Последний грейд':'Грейд не указан'};
+  }
+  function skillScale(skill){
+    const marks=[{key:'actual',title:'Текущий балл',value:skill.current,grade:skill.grade,note:gradeIndex(skill.current)<0?'Оценка не заполнена':''},
+      {key:'baseline',title:'Текущий эталонный балл',value:skill.reference,grade:skill.grade,note:skill.referenceNote},
+      {key:'next',title:'Следующий эталонный балл',value:skill.next,grade:skill.nextGrade,note:skill.nextNote}];
+    return '<section class="hr-skill-comparison" aria-label="Текущий балл и эталоны грейдов"><div class="hr-skill-metrics">'+marks.map(m=>'<div class="hr-skill-metric '+m.key+'"><span class="hr-metric-label"><i aria-hidden="true"></i>'+m.title+'</span><div><strong>'+label(m.value)+'</strong><span>'+esc(m.grade||'Грейд не указан')+'</span></div>'+(m.note?'<small>'+esc(m.note)+'</small>':'')+'</div>').join('')+'</div><div class="hr-profile-scale" aria-hidden="true">'+scale.map((g,i)=>'<div class="hr-profile-step '+(i===gradeIndex(skill.current)?'chosen':'')+'"><span>'+g+'</span><div class="hr-profile-markers">'+marks.map(m=>'<i class="'+m.key+(i===gradeIndex(m.value)?' marked':'')+'"></i>').join('')+'</div></div>').join('')+'</div></section>';
+  }
+  function docsLoading(){
+    return '<div class="hr-docs-loading" role="status"><div class="hr-docs-loading-title">Загружаем описание компетенции<span>Confluence</span></div><div class="hr-docs-progress" role="progressbar" aria-label="Загрузка описания компетенции"><span></span></div><div class="hr-docs-skeleton" aria-hidden="true"><i></i><i></i><i></i></div></div>';
   }
   function gapsDetail(person,data,kind){
     const d=development(person,data,kind);
@@ -286,10 +317,11 @@ globalThis.UbaitHR=(()=>{
       }catch(e){data=null;lastContent='';state.person='';state.reference='';error=e.name==='AbortError'?'HR не ответил за 70 секунд. Проверь выполнение флоу HR в n8n.':e.message;}
       finally{clearTimeout(timer);loading=false;if(!background||changed||error)render();}
     }
-    function skillDialog(code,referenceId=state.reference){
-      const p=person(),ref=data.references.find(r=>r.unit.task_id===referenceId),skill=comparison(p,ref,state.kind).flatMap(g=>g.items).find(s=>s.code===code);if(!skill)return;
+    function skillDialog(code){
+      const p=person(),skill=skillProfile(p,data,state.kind,code);if(!skill)return;
+      root.querySelector('#hr-skill-dialog').dataset.mode='skill';
       root.querySelector('#hr-dialog-label').textContent='Профиль навыка';
-      root.querySelector('#hr-skill-body').innerHTML='<span class="hr-kicker">'+(state.kind==='boss'?'Руководитель':'Сотрудник')+' · '+esc(referenceLabel(ref,data))+'</span><h3 id="hr-skill-title">'+esc(skill.name)+'</h3>'+detailsRows([['Текущая оценка',label(skill.current)],['План сотрудника',label(skill.target)],['Эталон '+referenceLabel(ref,data),label(skill.reference)],['Балл AS IS',fmt(gradePoints(skill.current))],['Балл эталона',fmt(gradePoints(skill.reference))]])+'<div class="hr-dialog-levels" aria-hidden="true">'+scale.map((g,i)=>'<span class="'+(i===gradeIndex(skill.current)?'chosen ':'')+(i===gradeIndex(skill.reference)?'reference':'')+'">'+g+'</span>').join('')+'</div><p class="hr-source">Фиолетовый — AS IS · Золотой — эталон</p><div id="hr-competency-docs" class="hr-docs-slot" data-code="'+esc(code)+'"></div><div class="hr-divider"></div><button class="action" data-hr-open-ipr="'+esc(skill.name)+'">Найти в годовом ИПР →</button>';
+      root.querySelector('#hr-skill-body').innerHTML='<span class="hr-kicker">'+(state.kind==='boss'?'Руководитель':'Сотрудник')+' · '+esc(skill.grade||'Грейд не указан')+'</span><h3 id="hr-skill-title">'+esc(skill.name)+'</h3>'+skillScale(skill)+'<div id="hr-competency-docs" class="hr-docs-slot" data-code="'+esc(code)+'"></div><div class="hr-divider"></div><button class="action" data-hr-open-ipr="'+esc(skill.name)+'">Найти в годовом ИПР →</button>';
       root.querySelector('#hr-skill-body').innerHTML+=skillEvidence(p,skill,state.year);
       root.querySelector('#hr-skill-body').scrollTop=0;
       root.querySelector('#hr-skill-dialog').showModal();
@@ -299,7 +331,7 @@ globalThis.UbaitHR=(()=>{
       const slot=root.querySelector('#hr-competency-docs'),dialog=root.querySelector('#hr-skill-dialog');
       if(!slot||slot.dataset.code!==code)return;
       const current=()=>slot.isConnected&&dialog.open&&root.querySelector('#hr-competency-docs')===slot;
-      slot.innerHTML='<div class="hr-docs-loading" role="status"><span class="hr-spinner" aria-hidden="true"></span>Загружаем описание компетенции</div>';
+      slot.innerHTML=docsLoading();
       try{const doc=await loadDocs(code);if(current())slot.innerHTML=competencyGuide(doc);}
       catch{if(current())slot.innerHTML='<div class="hr-docs-error" role="status"><span>Не удалось загрузить описание.</span><button class="action" data-hr-docs-retry="'+esc(code)+'">Повторить</button></div>';}
     }
@@ -309,7 +341,7 @@ globalThis.UbaitHR=(()=>{
       if(!data)return;
       if(d.hrClose){root.querySelector('#hr-skill-dialog').close();return;}
       if(d.hrDocsRetry){void showDocs(d.hrDocsRetry);return;}
-      if(d.hrGaps){const dialog=root.querySelector('#hr-skill-dialog');root.querySelector('#hr-dialog-label').textContent='Гепы';root.querySelector('#hr-skill-body').innerHTML=gapsDetail(person(),data,state.kind);dialog.showModal();return;}
+      if(d.hrGaps){const dialog=root.querySelector('#hr-skill-dialog');dialog.dataset.mode='gaps';root.querySelector('#hr-dialog-label').textContent='Гепы';root.querySelector('#hr-skill-body').innerHTML=gapsDetail(person(),data,state.kind);dialog.showModal();return;}
       if(d.hrSkill){skillDialog(d.hrSkill,d.hrSkillReference);return;}
       if(d.hrOpenIpr){state.tab='ipr';state.iprQuery=d.hrOpenIpr;render('hr-ipr-tab');return;}
       if(d.hrTab&&Object.hasOwn(tabs,d.hrTab)){state.tab=d.hrTab;render('hr-'+d.hrTab+'-tab');return;}
@@ -332,5 +364,5 @@ globalThis.UbaitHR=(()=>{
     }
     void load();
   }
-  return {mount,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,competencyGuide,createDocsLoader};
+  return {mount,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading};
 })();
