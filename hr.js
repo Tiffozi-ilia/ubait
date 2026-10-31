@@ -95,6 +95,60 @@ globalThis.UbaitHR=(()=>{
   const detailsRows=rows=>`<dl class="hr-data-list">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v??'—')}</dd>`).join('')}</dl>`;
   const fileList=files=>Array.isArray(files)&&files.length?files.map(f=>`<span class="hr-file">▧ ${esc(f?.name||f?.filename||'Вложение')}</span>`).join('')+'<span class="hr-source">Открыть вложения можно в карточке Pyrus по ссылке в шапке.</span>':'<span class="hr-source">Нет вложений</span>';
   const levelBar=s=>`<div class="hr-levels" aria-hidden="true">${scale.map((_,i)=>`<i class="${i<=gradeIndex(s.current)?'filled ':''}${i===gradeIndex(s.reference)?'reference ':''}${i===gradeIndex(s.target)?'target':''}"></i>`).join('')}</div>`;
+  // A small, deliberately HTML-free Markdown renderer for reference text.
+  // All literal text is escaped; only the formatting below can produce markup.
+  function referenceMarkdown(value){
+    if(typeof value!=='string'||value.length>100000)return '';
+    const inline=text=>{
+      let html='',last=0;
+      const tokens=/`([^`\n]+)`|\[([^\]\n]{1,240})\]\(([^)\s]{1,2048})\)|\*\*([^*\n]+)\*\*|__([^_\n]+)__|\*([^*\n]+)\*|_([^_\n]+)_/g;
+      for(const m of text.matchAll(tokens)){
+        html+=esc(text.slice(last,m.index));last=m.index+m[0].length;
+        if(m[1]!==undefined)html+='<code>'+esc(m[1])+'</code>';
+        else if(m[2]!==undefined){
+          let href='';try{const u=new URL(m[3]);if(['https:','http:'].includes(u.protocol)&&!u.username&&!u.password)href=u.href;}catch{}
+          html+=href&&text[m.index-1]!=='!'?'<a href="'+esc(href)+'" target="_blank" rel="noopener noreferrer">'+esc(m[2])+'</a>':esc(m[0]);
+        }else html+=m[4]!==undefined||m[5]!==undefined?'<strong>'+esc(m[4]??m[5])+'</strong>':'<em>'+esc(m[6]??m[7])+'</em>';
+      }
+      return (html+esc(text.slice(last))).replace(/\n/g,'<br>');
+    };
+    let html='',paragraph=[],items=[],kind='ul';
+    const flushParagraph=()=>{if(paragraph.length)html+='<p>'+inline(paragraph.join('\n'))+'</p>';paragraph=[];};
+    const flushList=()=>{if(items.length)html+='<'+kind+'>'+items.map(s=>'<li>'+inline(s)+'</li>').join('')+'</'+kind+'>';items=[];};
+    for(const line of value.replace(/\r\n?/g,'\n').split('\n')){
+      if(!line.trim()){flushParagraph();flushList();continue;}
+      const heading=line.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*$/),bullet=line.match(/^\s*([•*+-]|\d+[.)])\s+(.+)$/);
+      if(heading){flushParagraph();flushList();html+='<h5>'+inline(heading[1])+'</h5>';}
+      else if(bullet){flushParagraph();const next=/^\d/.test(bullet[1])?'ol':'ul';if(kind!==next)flushList();kind=next;items.push(bullet[2].trim());}
+      else if(items.length&&/^\s{2,}/.test(line))items[items.length-1]+='\n'+line.trim();
+      else{flushList();paragraph.push(line.trim());}
+    }
+    flushParagraph();flushList();return html;
+  }
+  function competencyGuide(doc){
+    if(!doc)return '<p class="hr-source">Описание этой компетенции пока не опубликовано.</p>';
+    const section=key=>referenceMarkdown(doc[key]?.markdown);
+    const description=section('description'),criteria=section('criteria'),positive=section('positive'),negative=section('negative');
+    const source=[doc.description,doc.criteria,doc.positive,doc.negative].find(s=>/^\d{1,20}$/.test(s?.page_id??''));
+    return '<section class="hr-competency-guide" aria-label="Описание компетенции"><h4>О компетенции</h4><div class="hr-reference-text">'+(description||'<p>Описание пока не заполнено.</p>')+'</div>'+
+      [['Критерии оценки',criteria],['Положительная проявленность',positive],['Отрицательная проявленность',negative]].filter(([,text])=>text).map(([title,text])=>'<details class="hr-manifestation"><summary>'+title+'</summary><div class="hr-reference-text">'+text+'</div></details>').join('')+
+      (source?'<a class="hr-reference-link" href="https://confluence.sovcombank.ru/pages/viewpage.action?pageId='+source.page_id+'" target="_blank" rel="noopener noreferrer">Открыть в Confluence ↗</a>':'')+'</section>';
+  }
+  function createDocsLoader({fetchImpl=(...args)=>fetch(...args)}={}){
+    // No saved results or shared in-flight responses: every opening is a fresh request.
+    return async code=>{
+      if(typeof code!=='string'||!/^03\.01\.(?:01|02)\.\d{2}\.\d{2}$/.test(code))throw new Error('Invalid competency');
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),65000);
+      try{
+        const response=await fetchImpl('/api/competency-docs?matrix_id='+encodeURIComponent(code),{headers:{Accept:'application/json'},credentials:'same-origin',cache:'no-store',signal:controller.signal});
+        if(globalThis.UbaitAuth)await UbaitAuth.checked(response);
+        if(!response.ok)throw new Error('Reference unavailable');
+        const body=await response.json();
+        if(body?.schema_version!==2||body.matrix_id!==code||!body.competency||typeof body.competency!=='object'||Array.isArray(body.competency))throw new Error('Invalid reference');
+        return body.competency;
+      }finally{clearTimeout(timer);}
+    };
+  }
   function radarAxes(groups,kind){
     const mean=values=>values.every(v=>v!==null)?values.reduce((sum,v)=>sum+v,0)/values.length:null;
     if(kind==='boss'){
@@ -187,6 +241,7 @@ globalThis.UbaitHR=(()=>{
     if(root.dataset.hrMounted==='true'){void reloaders.get(root)?.();return;}
     root.dataset.hrMounted='true';
     let data=null,loading=false,error='',denied=false,lastContent='';
+    const loadDocs=createDocsLoader();
     const state={tab:'competencies',person:'',query:'',department:'',status:'',kind:'employee',reference:'',year:yearNow(),horizon:'',goalQuery:'',iprQuery:''};
     const person=()=>data?.people.find(p=>p.unit.task_id===state.person);
     const filtered=()=>data.people.filter(p=>(!state.department||p.unit.team===state.department)&&(!state.status||p.unit.status===state.status)&&(!state.query||[title(p),p.unit.position,p.unit.team,p.unit.task_id].join(' ').toLocaleLowerCase('ru').includes(state.query.toLocaleLowerCase('ru'))));
@@ -234,15 +289,26 @@ globalThis.UbaitHR=(()=>{
     function skillDialog(code,referenceId=state.reference){
       const p=person(),ref=data.references.find(r=>r.unit.task_id===referenceId),skill=comparison(p,ref,state.kind).flatMap(g=>g.items).find(s=>s.code===code);if(!skill)return;
       root.querySelector('#hr-dialog-label').textContent='Профиль навыка';
-      root.querySelector('#hr-skill-body').innerHTML='<span class="hr-kicker">'+(state.kind==='boss'?'Руководитель':'Сотрудник')+' · '+esc(referenceLabel(ref,data))+'</span><h3 id="hr-skill-title">'+esc(skill.name)+'</h3>'+detailsRows([['Текущая оценка',label(skill.current)],['План сотрудника',label(skill.target)],['Эталон '+referenceLabel(ref,data),label(skill.reference)],['Балл AS IS',fmt(gradePoints(skill.current))],['Балл эталона',fmt(gradePoints(skill.reference))]])+'<div class="hr-dialog-levels" aria-hidden="true">'+scale.map((g,i)=>'<span class="'+(i===gradeIndex(skill.current)?'chosen ':'')+(i===gradeIndex(skill.reference)?'reference':'')+'">'+g+'</span>').join('')+'</div><p class="hr-source">Фиолетовый — AS IS · Золотой — эталон</p><div class="hr-divider"></div><button class="action" data-hr-open-ipr="'+esc(skill.name)+'">Найти в годовом ИПР →</button>';
+      root.querySelector('#hr-skill-body').innerHTML='<span class="hr-kicker">'+(state.kind==='boss'?'Руководитель':'Сотрудник')+' · '+esc(referenceLabel(ref,data))+'</span><h3 id="hr-skill-title">'+esc(skill.name)+'</h3>'+detailsRows([['Текущая оценка',label(skill.current)],['План сотрудника',label(skill.target)],['Эталон '+referenceLabel(ref,data),label(skill.reference)],['Балл AS IS',fmt(gradePoints(skill.current))],['Балл эталона',fmt(gradePoints(skill.reference))]])+'<div class="hr-dialog-levels" aria-hidden="true">'+scale.map((g,i)=>'<span class="'+(i===gradeIndex(skill.current)?'chosen ':'')+(i===gradeIndex(skill.reference)?'reference':'')+'">'+g+'</span>').join('')+'</div><p class="hr-source">Фиолетовый — AS IS · Золотой — эталон</p><div id="hr-competency-docs" class="hr-docs-slot" data-code="'+esc(code)+'"></div><div class="hr-divider"></div><button class="action" data-hr-open-ipr="'+esc(skill.name)+'">Найти в годовом ИПР →</button>';
       root.querySelector('#hr-skill-body').innerHTML+=skillEvidence(p,skill,state.year);
+      root.querySelector('#hr-skill-body').scrollTop=0;
       root.querySelector('#hr-skill-dialog').showModal();
+      void showDocs(code);
+    }
+    async function showDocs(code){
+      const slot=root.querySelector('#hr-competency-docs'),dialog=root.querySelector('#hr-skill-dialog');
+      if(!slot||slot.dataset.code!==code)return;
+      const current=()=>slot.isConnected&&dialog.open&&root.querySelector('#hr-competency-docs')===slot;
+      slot.innerHTML='<div class="hr-docs-loading" role="status"><span class="hr-spinner" aria-hidden="true"></span>Загружаем описание компетенции</div>';
+      try{const doc=await loadDocs(code);if(current())slot.innerHTML=competencyGuide(doc);}
+      catch{if(current())slot.innerHTML='<div class="hr-docs-error" role="status"><span>Не удалось загрузить описание.</span><button class="action" data-hr-docs-retry="'+esc(code)+'">Повторить</button></div>';}
     }
     root.addEventListener('click',e=>{
       const button=e.target.closest('button'),d=button?.dataset;if(!d)return;
       if(d.hrRefresh){void load();return;}
       if(!data)return;
       if(d.hrClose){root.querySelector('#hr-skill-dialog').close();return;}
+      if(d.hrDocsRetry){void showDocs(d.hrDocsRetry);return;}
       if(d.hrGaps){const dialog=root.querySelector('#hr-skill-dialog');root.querySelector('#hr-dialog-label').textContent='Гепы';root.querySelector('#hr-skill-body').innerHTML=gapsDetail(person(),data,state.kind);dialog.showModal();return;}
       if(d.hrSkill){skillDialog(d.hrSkill,d.hrSkillReference);return;}
       if(d.hrOpenIpr){state.tab='ipr';state.iprQuery=d.hrOpenIpr;render('hr-ipr-tab');return;}
@@ -266,5 +332,5 @@ globalThis.UbaitHR=(()=>{
     }
     void load();
   }
-  return {mount,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel};
+  return {mount,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,competencyGuide,createDocsLoader};
 })();

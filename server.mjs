@@ -9,6 +9,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {createAuth} from './auth.mjs';
 import {authorizeHr} from './hr-access.mjs';
+import {createCompetencyDocs,isCompetencyId} from './competency-docs.mjs';
 
 export const BUILD_VERSION='2026.10.30-v2.6';
 
@@ -54,6 +55,7 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
    };
   }
   const upstream=channel('map'),hrUpstream=channel('hr');
+  const competencyDocs=createCompetencyDocs({fetchImpl,now});
   const server=http.createServer(async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('Strict-Transport-Security','max-age=86400');
@@ -84,6 +86,16 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
         return json(e.status||503,{error:e.status===401?'Войдите в систему.':'Сервис входа временно недоступен.'});
       }
       if(url.pathname==='/auth/me')return json(200,user);
+      if(url.pathname==='/api/competency-docs'){
+        res.setHeader('Vary','Cookie');
+        const matrixId=url.searchParams.get('matrix_id');
+        if(url.searchParams.getAll('matrix_id').length!==1||!isCompetencyId(matrixId))return json(400,{error:'Нужен matrix_id одной компетенции.'});
+        try{
+          const body=await competencyDocs(matrixId);
+          if(req.method==='HEAD'){res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});return res.end();}
+          return json(200,body);
+        }catch{return json(503,{error:'Описания компетенций временно недоступны.'});}
+      }
       if(url.pathname==='/api/story-map'){
         const body=await upstream();res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:body);
       }
