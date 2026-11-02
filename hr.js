@@ -76,9 +76,8 @@ globalThis.UbaitHR=(()=>{
     const grade=r.unit.grade||'Без грейда';
     return data.references.filter(x=>x.unit.grade===r.unit.grade).length>1?grade+' · '+(r.unit.position||r.unit.team||'карточка')+' · #'+r.unit.task_id:grade;
   }
-  function defaultReference(p,data){
-    const matches=data.references.filter(r=>r.unit.grade===p?.unit.grade);
-    return matches.length===1?matches[0].unit.task_id:'';
+  function defaultReference(p,data,kind='employee'){
+    return calculatedGrade(p,data,kind).baseline?.card?.unit.task_id||'';
   }
   function comparison(person,reference,kind){
     const current=person['skills_'+kind]??{},ref=reference?.['skills_'+kind]??{};
@@ -196,31 +195,47 @@ globalThis.UbaitHR=(()=>{
     const subtotal=assessed.reduce((s,v)=>s+v,0),stored=num(record['score_sum_asis_'+kind]);
     return {total:complete?subtotal:null,subtotal,assessed:assessed.length,count:values.length,stored,mismatch:complete&&stored!==null&&Math.abs(stored-subtotal)>.005};
   }
+  function calculatedGrade(person,data,kind='employee'){
+    const current=scoreProfile(person,kind);
+    const bands=careerGrades.map(grade=>{
+      const matches=(data?.references??[]).filter(r=>r.unit.status==='Эталон'&&norm(r.unit.grade)===norm(grade));
+      const card=matches.length===1?matches[0]:null;
+      return {grade,card,count:matches.length,score:scoreProfile(card,kind)};
+    });
+    const result={current,bands,grade:'',label:'Не определён',baseline:null,next:null,status:'incomplete',reason:'Оценено '+current.assessed+' из '+current.count};
+    if(current.total===null)return result;
+    const unavailable=bands.find(b=>b.count!==1||b.score.total===null);
+    if(unavailable)return {...result,status:'references',reason:unavailable.count>1?'Несколько эталонов: '+unavailable.grade:!unavailable.count?'Нет эталона: '+unavailable.grade:'Не заполнен эталон: '+unavailable.grade};
+    // Recalculate from AS IS, not the stored unit.grade or planned ratings.
+    // Gaps are shown against the calculated grade; they do not lower the grade by points.
+    const at=bands.reduce((best,b,i)=>current.total>=b.score.total?i:best,-1);
+    if(at<0)return {...result,status:'below',label:'Ниже Юнлинга',reason:'Порог Юнлинга не достигнут',next:bands[0]};
+    return {...result,status:'calculated',grade:bands[at].grade,label:bands[at].grade,reason:'',baseline:bands[at],next:bands[at+1]??null};
+  }
   function development(person,data,kind){
-    const current=scoreProfile(person,kind),grade=person.unit.grade||'',at=careerGrades.findIndex(g=>norm(g)===norm(grade));
-    const find=g=>{const matches=g?data.references.filter(r=>norm(r.unit.grade)===norm(g)):[];return {card:matches.length===1?matches[0]:null,count:matches.length};};
-    const baseline=find(grade),nextGrade=at>=0?careerGrades[at+1]||'':'',next=find(nextGrade);
+    const calculated=calculatedGrade(person,data,kind),{current,grade}=calculated;
+    const baseline=calculated.baseline??{card:null,count:0},nextGrade=calculated.next?.grade||'',next=calculated.next??{card:null,count:0};
     const reference=scoreProfile(baseline.card,kind),nextReference=scoreProfile(next.card,kind);
     const rows=comparison(person,baseline.card,kind).flatMap(g=>g.items).map(s=>({...s,actualPoints:gradePoints(s.current),referencePoints:gradePoints(s.reference)}));
     const comparable=rows.filter(s=>s.actualPoints!==null&&s.referencePoints!==null);
     const gaps=comparable.filter(s=>s.actualPoints<s.referencePoints).map(s=>({...s,gap:s.referencePoints-s.actualPoints})).sort((a,b)=>b.gap-a.gap||a.code.localeCompare(b.code));
     const noGaps=comparable.length===rows.length?gaps.length===0:gaps.length?false:null;
     const enough=current.total!==null&&nextReference.total!==null?current.total>=nextReference.total:null;
-    const transition=!nextGrade?'none':enough===false||noGaps===false?'blocked':enough===true&&noGaps===true?'met':'unknown';
-    return {grade,knownGrade:at>=0,nextGrade,current,baseline,reference,next,nextReference,rows,comparable:comparable.length,gaps,noGaps,enough,transition};
+    const transition=!nextGrade?(grade?'none':'unknown'):enough===false||noGaps===false?'blocked':enough===true&&noGaps===true?'met':'unknown';
+    return {grade,knownGrade:Boolean(grade),calculated,nextGrade,current,baseline,reference,next,nextReference,rows,comparable:comparable.length,gaps,noGaps,enough,transition};
   }
   function developmentSummary(person,data,kind){
     const d=development(person,data,kind),partial=d.comparable<d.rows.length;
     const gapValue=d.comparable===0?'—':partial?(d.gaps.length?'≥ '+d.gaps.length:'—'):String(d.gaps.length);
     const nextLabel=d.nextGrade||'—',nextNote=!d.nextGrade?(d.knownGrade?'Последний грейд':'Грейд не определён'):d.next.count>1?'Несколько эталонов':!d.next.card?'Эталон не найден':d.nextReference.total===null?'Эталон заполнен не полностью':'баллов эталона';
-    return '<section class="hr-score-strip" aria-label="Статистика компетенций"><div class="hr-card hr-score-tile"><span class="hr-kicker">Текущий грейд</span><div class="hr-score-line"><strong class="hr-score-grade">'+esc(d.grade||'Не указан')+'</strong><strong class="hr-score-number">'+fmt(d.current.total)+'</strong></div><span class="hr-score-caption">'+(d.current.total===null?'Оценено '+d.current.assessed+' из '+d.current.count:'баллов AS IS')+'</span></div><div class="hr-card hr-score-tile"><span class="hr-kicker">Следующий грейд</span><div class="hr-score-line"><strong class="hr-score-grade">'+esc(nextLabel)+'</strong><strong class="hr-score-number">'+fmt(d.nextReference.total)+'</strong></div><span class="hr-score-caption">'+nextNote+'</span></div><button class="hr-card hr-score-tile hr-gap-trigger" data-hr-gaps="true" aria-haspopup="dialog" aria-label="Открытые гепы к текущему грейду: '+gapValue+'. Открыть детализацию"><span class="hr-kicker">Гепы к текущему грейду</span><span class="hr-score-line"><strong class="hr-score-number">'+gapValue+'</strong><span class="hr-gap-link">Подробнее ↗</span></span><span class="hr-score-caption">'+(partial?'Сопоставлено '+d.comparable+' из '+d.rows.length:esc(d.grade||'Грейд не указан'))+'</span></button></section>';
+    return '<section class="hr-score-strip" aria-label="Статистика компетенций"><div class="hr-card hr-score-tile"><span class="hr-kicker">Текущий грейд</span><div class="hr-score-line"><strong class="hr-score-grade">'+esc(d.calculated.label)+'</strong><strong class="hr-score-number">'+fmt(d.current.total)+'</strong></div><span class="hr-score-caption">'+esc(d.calculated.reason||'баллов AS IS')+'</span></div><div class="hr-card hr-score-tile"><span class="hr-kicker">Следующий грейд</span><div class="hr-score-line"><strong class="hr-score-grade">'+esc(nextLabel)+'</strong><strong class="hr-score-number">'+fmt(d.nextReference.total)+'</strong></div><span class="hr-score-caption">'+nextNote+'</span></div><button class="hr-card hr-score-tile hr-gap-trigger" data-hr-gaps="true" aria-haspopup="dialog" aria-label="Открытые гепы к текущему грейду: '+gapValue+'. Открыть детализацию"><span class="hr-kicker">Гепы к текущему грейду</span><span class="hr-score-line"><strong class="hr-score-number">'+gapValue+'</strong><span class="hr-gap-link">Подробнее ↗</span></span><span class="hr-score-caption">'+(partial?'Сопоставлено '+d.comparable+' из '+d.rows.length:esc(d.grade||'Грейд не определён'))+'</span></button></section>';
   }
   function skillProfile(person,data,kind,code){
     const d=development(person,data,kind),skill=d.rows.find(s=>s.code===code);if(!skill)return null;
     const note=(ref,value)=>ref.count>1?'Несколько эталонов':!ref.card?'Эталон не найден':gradeIndex(value)<0?'Оценка не заполнена':'';
     const next=d.next.card?.['skills_'+kind]?.[code+'_current']??null;
     return {...skill,grade:d.grade,nextGrade:d.nextGrade,next,
-      referenceNote:note(d.baseline,skill.reference),nextNote:d.nextGrade?note(d.next,next):d.knownGrade?'Последний грейд':'Грейд не указан'};
+      referenceNote:d.calculated.reason||note(d.baseline,skill.reference),nextNote:d.nextGrade?note(d.next,next):d.knownGrade?'Последний грейд':'Грейд не определён'};
   }
   function skillScale(skill){
     const marks=[{key:'actual',title:'Текущий балл',value:skill.current,grade:skill.grade,note:gradeIndex(skill.current)<0?'Оценка не заполнена':''},
@@ -233,8 +248,8 @@ globalThis.UbaitHR=(()=>{
   }
   function gapsDetail(person,data,kind){
     const d=development(person,data,kind);
-    const issue=d.baseline.count>1?'Найдено несколько эталонов текущего грейда.':!d.baseline.card?'Эталон текущего грейда не найден.':d.comparable<d.rows.length?'Сопоставлено '+d.comparable+' из '+d.rows.length+' компетенций. Остальным не хватает оценки.':'';
-    return '<h3 id="hr-skill-title">Гепы к текущему грейду</h3><p class="hr-gap-context">'+esc(d.grade||'Грейд не указан')+' · '+(d.comparable===d.rows.length?'Гепов: '+d.gaps.length:d.gaps.length?'Гепов: ≥ '+d.gaps.length:'Сравнение неполное')+'</p>'+(issue?'<p class="hr-note">'+issue+'</p>':'')+(d.gaps.length?'<div class="hr-gap-table-wrap"><table class="hr-gap-table"><thead><tr><th>Компетенция</th><th>AS IS</th><th>Эталон</th><th>Разрыв</th></tr></thead><tbody>'+d.gaps.map(s=>'<tr><th scope="row">'+esc(s.name)+'</th><td><b>'+label(s.current)+'</b><small>'+fmt(s.actualPoints)+' б.</small></td><td><b>'+label(s.reference)+'</b><small>'+fmt(s.referencePoints)+' б.</small></td><td class="hr-gap-points">−'+fmt(s.gap)+'</td></tr>').join('')+'</tbody></table></div>':!issue?'<p class="hr-gap-empty">Открытых гепов нет</p>':'');
+    const issue=d.calculated.reason||(!d.baseline.card?'Эталон текущего грейда не найден.':d.comparable<d.rows.length?'Сопоставлено '+d.comparable+' из '+d.rows.length+' компетенций. Остальным не хватает оценки.':'');
+    return '<h3 id="hr-skill-title">Гепы к текущему грейду</h3><p class="hr-gap-context">'+esc(d.calculated.label)+' · '+(d.comparable===d.rows.length?'Гепов: '+d.gaps.length:d.gaps.length?'Гепов: ≥ '+d.gaps.length:'Сравнение неполное')+'</p>'+(issue?'<p class="hr-note">'+esc(issue)+'</p>':'')+(d.gaps.length?'<div class="hr-gap-table-wrap"><table class="hr-gap-table"><thead><tr><th>Компетенция</th><th>AS IS</th><th>Эталон</th><th>Разрыв</th></tr></thead><tbody>'+d.gaps.map(s=>'<tr><th scope="row">'+esc(s.name)+'</th><td><b>'+label(s.current)+'</b><small>'+fmt(s.actualPoints)+' б.</small></td><td><b>'+label(s.reference)+'</b><small>'+fmt(s.referencePoints)+' б.</small></td><td class="hr-gap-points">−'+fmt(s.gap)+'</td></tr>').join('')+'</tbody></table></div>':!issue?'<p class="hr-gap-empty">Открытых гепов нет</p>':'');
   }
   function competencies(person,data,state){
     // Keep existing skill cards; summarize AS IS separately from the comparison selector.
@@ -263,8 +278,8 @@ globalThis.UbaitHR=(()=>{
     const rows=all.filter(r=>yearMatches(r.skills_year,state.year)&&(!state.iprQuery||String(r.skill??'').toLocaleLowerCase('ru').includes(state.iprQuery.toLocaleLowerCase('ru'))));
     return `<div class="hr-controls">${select('year','Год развития',years,state.year,true)}<span class="hr-source">${rows.length} компетенций · ${rows.filter(r=>r.skill_result_done).length} с описанным результатом</span><input id="hr-ipr-search" class="hr-search" type="search" placeholder="Найти компетенцию…" aria-label="Найти компетенцию ИПР" value="${esc(state.iprQuery)}"></div><div class="hr-ipr-grid">${rows.map(r=>`<article class="hr-card hr-ipr-card"><div class="hr-ipr-tags"><span class="hr-kicker">${esc(r.skill_block||'Компетенция')}</span>${r.skills_by_chief?pill('От руководителя','accent'):''}</div><h3>${esc(r.skill||'Компетенция не указана')}</h3><div class="hr-grade-route"><div><small>AS IS</small><strong>${label(r.skill_asis)}</strong></div><span aria-hidden="true">→</span><div><small>TO BE</small><strong>${label(r.skill_tobe)}</strong></div>${pill(r.skill_result_done?'Результат описан':'Ожидает результата',r.skill_result_done?'good':'')}</div>${prose('Что сделано',r.skill_result_done)}<details><summary>Обратная связь</summary><p class="hr-prose">${esc(r.skill_feedback||'Пока не заполнена')}</p></details></article>`).join('')||'<div class="hr-empty"><h3>Нет пунктов ИПР</h3><p>Выбери другой год или очисти поиск.</p></div>'}</div><p class="hr-source" style="margin-top:15px">Описанный результат не означает, что навык подтверждён. AS IS / TO BE здесь — значения плана развития, а не автоматическое изменение профиля компетенций.</p>`;
   }
-  function employee(person){
-    const u=person.unit,c=person.check;
+  function employee(person,data,kind='employee'){
+    const u={...person.unit,grade:calculatedGrade(person,data,kind).label},c=person.check;
     return `<div class="hr-profile-grid"><section class="hr-card"><h3>Работа и команда</h3>${detailsRows([['Сотрудник',u.staff],['Статус',u.status],['Отдел · team',u.team],['Руководитель',u.chief],['Почта руководителя',u.chief_email],['Должность',u.position],['Грейд',u.grade],['Уровень управления',u.level],['Стримы',u.stream.join(' · ')],['Бизнес-опыт, лет',u.business_stage]])}</section><section class="hr-card"><h3>Контакты и рабочее место</h3>${detailsRows([['Почта',u.staff_email],['Телефон',u.phone],['Город',u.city],['Бизнес-центр',u.center],['Рабочее место',u.place],['День рождения',day(u.birthday)],['Фото',u.photo.length?'См. вложения ниже':'Нет вложения']])}${fileList(u.photo)}</section><section class="hr-card"><h3>Условия</h3>${detailsRows([['Оклад',fmt(u.cost)],['Ожидания',fmt(u.expectations)],['Аура · исходное значение',u.aura],['Экспорт в BI',u.export_bi===null?'Не указано':u.export_bi?'Да':'Нет']])}<span class="hr-prose-title">Оффер</span>${fileList(u.offer)}<p class="hr-source" style="margin-top:12px">Исходные значения из штатки. Валюта, период и состав выплат не выводятся из числа автоматически.</p></section><section class="hr-card"><h3>Даты и характеристика</h3><div class="hr-timeline">${[['Приём',u.date_in],['Перевод',u.date_transfer],['Увольнение',u.date_out]].map(([k,v])=>`<div><small>${k}</small><strong>${day(v)}</strong></div>`).join('')}</div>${prose('Характеристика',u.characteristic)}</section><section class="hr-card wide"><div class="hr-panel-top"><h3>Испытательный срок</h3>${pill('Окончание · '+day(c.check_end_date),u.status==='Испытательный срок'?'accent':'')}</div><p class="hr-prose">${esc(c.check_task||'Задача на испытательный срок не заполнена')}</p><div class="hr-check-grid">${[['Удалось',c.check_result_done],['Не удалось',c.check_result_fail],['Помогало',c.check_result_assist],['Мешало',c.check_result_disturb]].map(([k,v])=>`<div>${prose(k,v)}</div>`).join('')}</div>${prose('Обратная связь',c.check_feedback)}</section></div>`;
   }
   const reloaders=new WeakMap();
@@ -273,7 +288,7 @@ globalThis.UbaitHR=(()=>{
     root.dataset.hrMounted='true';
     let data=null,loading=false,error='',denied=false,lastContent='';
     const loadDocs=createDocsLoader();
-    const state={tab:'competencies',person:'',query:'',department:'',status:'',kind:'employee',reference:'',year:yearNow(),horizon:'',goalQuery:'',iprQuery:''};
+    const state={tab:'competencies',person:'',query:'',department:'',status:'',kind:'employee',reference:'',referenceManual:false,year:yearNow(),horizon:'',goalQuery:'',iprQuery:''};
     const person=()=>data?.people.find(p=>p.unit.task_id===state.person);
     const filtered=()=>data.people.filter(p=>(!state.department||p.unit.team===state.department)&&(!state.status||p.unit.status===state.status)&&(!state.query||[title(p),p.unit.position,p.unit.team,p.unit.task_id].join(' ').toLocaleLowerCase('ru').includes(state.query.toLocaleLowerCase('ru'))));
     const spinner=()=>'<div class="hr-empty hr-loading" role="status"><span class="hr-spinner" aria-hidden="true"></span><h3>Загружаем штатные данные</h3><p>Сотрудники, компетенции, KPI и ИПР из БД</p></div>';
@@ -286,15 +301,16 @@ globalThis.UbaitHR=(()=>{
       }
       const people=filtered(),oldPerson=state.person;
       if(!people.some(p=>p.unit.task_id===state.person))state.person=people[0]?.unit.task_id??'';
-      const p=person();if(state.person!==oldPerson)state.reference=defaultReference(p,data);
+      const p=person();if(state.person!==oldPerson)state.referenceManual=false;
+      if(!state.referenceManual)state.reference=defaultReference(p,data,state.kind);
       const departments=[...new Set(data.people.map(p=>p.unit.team).filter(Boolean))].sort(),statuses=[...new Set(data.people.map(p=>p.unit.status).filter(Boolean))].sort();
       const missing=p?.missing_blocks?.length?'<div class="hr-note">В БД не найдены блоки этой карточки: '+esc(p.missing_blocks.join(', '))+'. Поля этих блоков показаны пустыми. Проверь загрузку штатки.</div>':'';
       const same=p?.same_person_cards>1?'<div class="hr-note">У этого человека '+p.same_person_cards+' карточки в штатке. Сейчас открыта #'+esc(p.unit.task_id)+'; данные разных карточек не объединяются.</div>':'';
       root.innerHTML=nav+
-        '<div class="hr-layout"><aside class="hr-directory" aria-label="Выбор сотрудника"><div class="hr-directory-top"><div class="hr-directory-label"><span>Карточки</span><span>'+people.length+' / '+data.people.length+'</span></div><input id="hr-person-search" type="search" class="hr-search" placeholder="ФИО или ID…" aria-label="Найти сотрудника" value="'+esc(state.query)+'">'+select('department','Отдел',departments,state.department,true)+select('status','Статус',statuses,state.status,true)+'</div><div class="hr-directory-list">'+(people.map(p=>'<button class="hr-person" data-hr-person="'+esc(p.unit.task_id)+'" aria-pressed="'+(state.person===p.unit.task_id)+'"><span class="hr-avatar" aria-hidden="true">'+initials(p.unit.staff||p.unit.status)+'</span><span><strong>'+esc(title(p))+'</strong><small>'+esc([p.unit.team,p.unit.grade].filter(Boolean).join(' · ')||'Без отдела / грейда')+'</small><small>'+esc(p.unit.status||'Без статуса')+' · #'+esc(p.unit.task_id)+'</small></span></button>').join('')||'<p class="hr-source">Нет совпадений</p>')+'</div><footer class="hr-directory-footer">'+data.references.length+' эталонов<br>Изменено в Pyrus: '+esc(timestamp(data.meta.last_source_update))+'</footer></aside><div class="hr-detail">'+
-        (p?'<header class="hr-identity"><span class="hr-avatar" aria-hidden="true">'+initials(p.unit.staff||p.unit.status)+'</span><div><h2>'+esc(title(p))+'</h2><p>'+esc([p.unit.position,p.unit.team].filter(Boolean).join(' · '))+' · <a href="https://pyrus.sovcombank.ru/t#id'+p.unit.task_id+'" target="_blank" rel="noopener noreferrer">#'+p.unit.task_id+' ↗</a></p></div><div class="hr-identity-tags">'+pill(p.unit.grade||'Грейд не указан','accent')+pill(p.unit.status||'Без статуса')+'</div></header>':'')+
+        '<div class="hr-layout"><aside class="hr-directory" aria-label="Выбор сотрудника"><div class="hr-directory-top"><div class="hr-directory-label"><span>Карточки</span><span>'+people.length+' / '+data.people.length+'</span></div><input id="hr-person-search" type="search" class="hr-search" placeholder="ФИО или ID…" aria-label="Найти сотрудника" value="'+esc(state.query)+'">'+select('department','Отдел',departments,state.department,true)+select('status','Статус',statuses,state.status,true)+'</div><div class="hr-directory-list">'+(people.map(p=>'<button class="hr-person" data-hr-person="'+esc(p.unit.task_id)+'" aria-pressed="'+(state.person===p.unit.task_id)+'"><span class="hr-avatar" aria-hidden="true">'+initials(p.unit.staff||p.unit.status)+'</span><span><strong>'+esc(title(p))+'</strong><small>'+esc([p.unit.team,calculatedGrade(p,data,state.kind).label].filter(Boolean).join(' · '))+'</small><small>'+esc(p.unit.status||'Без статуса')+' · #'+esc(p.unit.task_id)+'</small></span></button>').join('')||'<p class="hr-source">Нет совпадений</p>')+'</div><footer class="hr-directory-footer">'+data.references.length+' эталонов<br>Изменено в Pyrus: '+esc(timestamp(data.meta.last_source_update))+'</footer></aside><div class="hr-detail">'+
+        (p?'<header class="hr-identity"><span class="hr-avatar" aria-hidden="true">'+initials(p.unit.staff||p.unit.status)+'</span><div><h2>'+esc(title(p))+'</h2><p>'+esc([p.unit.position,p.unit.team].filter(Boolean).join(' · '))+' · <a href="https://pyrus.sovcombank.ru/t#id'+p.unit.task_id+'" target="_blank" rel="noopener noreferrer">#'+p.unit.task_id+' ↗</a></p></div><div class="hr-identity-tags">'+pill(calculatedGrade(p,data,state.kind).label,'accent')+pill(p.unit.status||'Без статуса')+'</div></header>':'')+
         '<section id="hr-tab-content" class="hr-content" role="tabpanel" aria-labelledby="hr-'+state.tab+'-tab">'+
-        (!p?'<div class="hr-empty"><h3>Сотрудник не выбран</h3><p>Измени поиск или фильтры отдела и статуса. В списке только доступные тебе карточки.</p></div>':missing+same+(state.tab==='competencies'?competencies(p,data,state):state.tab==='kpi'?kpi(p,state):state.tab==='ipr'?ipr(p,state):employee(p)))+
+        (!p?'<div class="hr-empty"><h3>Сотрудник не выбран</h3><p>Измени поиск или фильтры отдела и статуса. В списке только доступные тебе карточки.</p></div>':missing+same+(state.tab==='competencies'?competencies(p,data,state):state.tab==='kpi'?kpi(p,state):state.tab==='ipr'?ipr(p,state):employee(p,data,state.kind)))+
         '</section></div></div><dialog id="hr-skill-dialog" class="hr-dialog" aria-labelledby="hr-skill-title"><div class="dialog-top"><span class="hr-source" id="hr-dialog-label">Профиль навыка</span><button class="action" data-hr-close="true">Закрыть</button></div><div class="detail-body" id="hr-skill-body"></div></dialog>';
       if(focusId){const el=root.querySelector('#'+focusId);el?.focus({preventScroll:true});if(selection&&el?.setSelectionRange)el.setSelectionRange(...selection);}
     }
@@ -311,9 +327,9 @@ globalThis.UbaitHR=(()=>{
         const loaded=parsePayload(payload),content=JSON.stringify([payload.access,payload.cards]);
         changed=content!==lastContent;lastContent=content;data=loaded;
         if(!data.people.some(p=>p.unit.task_id===state.person)){
-          state.person=data.access.employee_task_id;state.reference=defaultReference(person(),data);
+          state.person=data.access.employee_task_id;state.referenceManual=false;
         }
-        if(state.reference&&!data.references.some(r=>r.unit.task_id===state.reference))state.reference='';
+        if(state.reference&&!data.references.some(r=>r.unit.task_id===state.reference)){state.reference='';state.referenceManual=false;}
       }catch(e){data=null;lastContent='';state.person='';state.reference='';error=e.name==='AbortError'?'HR не ответил за 70 секунд. Проверь выполнение флоу HR в n8n.':e.message;}
       finally{clearTimeout(timer);loading=false;if(!background||changed||error)render();}
     }
@@ -345,9 +361,9 @@ globalThis.UbaitHR=(()=>{
       if(d.hrSkill){skillDialog(d.hrSkill,d.hrSkillReference);return;}
       if(d.hrOpenIpr){state.tab='ipr';state.iprQuery=d.hrOpenIpr;render('hr-ipr-tab');return;}
       if(d.hrTab&&Object.hasOwn(tabs,d.hrTab)){state.tab=d.hrTab;render('hr-'+d.hrTab+'-tab');return;}
-      if(d.hrPerson&&data.people.some(p=>p.unit.task_id===d.hrPerson)){state.person=d.hrPerson;state.reference=defaultReference(person(),data);state.goalQuery='';state.iprQuery='';state.horizon='';render();return;}
-      if(d.hrKind&&definitions[d.hrKind])state.kind=d.hrKind;
-      else if(d.hrReference&&data.references.some(r=>r.unit.task_id===d.hrReference))state.reference=d.hrReference;
+      if(d.hrPerson&&data.people.some(p=>p.unit.task_id===d.hrPerson)){state.person=d.hrPerson;state.referenceManual=false;state.goalQuery='';state.iprQuery='';state.horizon='';render();return;}
+      if(d.hrKind&&definitions[d.hrKind]){state.kind=d.hrKind;state.referenceManual=false;}
+      else if(d.hrReference&&data.references.some(r=>r.unit.task_id===d.hrReference)){state.reference=d.hrReference;state.referenceManual=true;}
       else if(d.hrFilter&&['year','horizon','department','status'].includes(d.hrFilter)){state[d.hrFilter]=d.value??'';if(d.hrFilter==='year')state.horizon='';}
       else return;render();
     });
@@ -364,5 +380,5 @@ globalThis.UbaitHR=(()=>{
     }
     void load();
   }
-  return {mount,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading};
+  return {mount,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,calculatedGrade,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading};
 })();
