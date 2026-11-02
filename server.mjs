@@ -98,7 +98,7 @@ export function createCompetencyDocs({fetchImpl=fetch,now=Date.now,timeoutMs=600
   };
 }
 
-export const BUILD_VERSION='2026.10.30-v2.6';
+export const BUILD_VERSION='2026.11.02-v2.7.1';
 
 export function hrWebhookAddress(mapAddress){
   if(!mapAddress)throw Object.assign(new Error('В Amvera не задана переменная STORY_MAP_WEBHOOK_URL.'),{status:503});
@@ -194,7 +194,7 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
         const body=JSON.stringify(authorizeHr(JSON.parse(await hrUpstream()),user));
         res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:body);
       }
-      if(['/errors.js','/stat.js','/hr.js','/hr.css','/auth-client.js'].includes(url.pathname)){
+      if(['/errors.js','/stat.js','/kanban.js','/hr.js','/hr.css','/auth-client.js'].includes(url.pathname)){
         const source=await readFile(new URL('.'+url.pathname,import.meta.url),'utf8');
         res.writeHead(200,{'Content-Type':url.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:source);
       }
