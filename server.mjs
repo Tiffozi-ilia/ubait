@@ -98,7 +98,7 @@ export function createCompetencyDocs({fetchImpl=fetch,now=Date.now,timeoutMs=600
   };
 }
 
-export const BUILD_VERSION='2026.11.02-v2.7.1';
+export const BUILD_VERSION='2026.11.02-v2.7.2';
 
 export function hrWebhookAddress(mapAddress){
   if(!mapAddress)throw Object.assign(new Error('В Amvera не задана переменная STORY_MAP_WEBHOOK_URL.'),{status:503});
