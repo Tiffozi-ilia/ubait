@@ -27,10 +27,13 @@ globalThis.UbaitKanban=(()=>{
  function calculate(model,filters){
   const M=globalThis.StoryMapModel,f={...M.defaults(),...filters};
   const columns=K.statuses.map(s=>({...s,tasks:[]})),byStatus=new Map(columns.map(c=>[c.id,c]));
-  const scope=[],search=f.search.trim().toLocaleLowerCase('ru');
-  for(const task of model.stories.values()){
+  const scope=[];
+  // Reuse the Story Map filter engine. Only map-specific orphan/issues toggles
+  // are ignored; unassigned tasks remain visible on a status board.
+  const groups=M.groups(model,{...f,orphanOnly:false,issuesOnly:false},{includeUnassigned:true});
+  for(const task of groups.flatMap(p=>p.epics.flatMap(e=>e.visible))){
    const id=statusOf(task.status);
-   if(id==='stop'||id==='trash'||!M.cutMatches(task,f)||(search&&!task.search.includes(search)))continue;
+   if(id==='stop'||id==='trash')continue;
    scope.push(task);
    if(!byStatus.has(id))byStatus.set(id,{id,title:id==='consultation'?'Консультация':task.status||'Без статуса',color:'var(--sub)',tasks:[]});
    byStatus.get(id).tasks.push(task);
@@ -58,7 +61,6 @@ globalThis.UbaitKanban=(()=>{
   return '<div class="kb-board" aria-label="Задачи по текущим статусам">'+report.columns.map(c=>'<section class="kb-board-column" style="--status-color:'+c.color+'" aria-label="'+esc(c.title)+'" data-board-column="'+esc(c.id)+'"><header class="kb-board-head"><div class="kb-board-title"><h2>'+esc(c.title)+'</h2><span title="Количество задач">'+c.count+'</span></div><div class="kb-board-sp" title="'+(c.missingSp?'Сумма известных SP; без оценки: '+c.missingSp:'Суммарные нормализованные SP задач по фильтрам')+'"><strong>'+fmt(c.sp)+(c.missingSp?' *':'')+'</strong><span>SP</span></div>'+readiness(c)+'</header><div class="kb-board-list" tabindex="0" aria-label="'+esc(c.title)+': список задач">'+list(c,report,limits.get(c.id)||pageSize)+'</div></section>').join('')+'</div>';
  }
  const css=[
- '.app-panel[data-view="kanban"] #project-year,.app-panel[data-view="kanban"] #story-period{display:none}',
  '#kanban-view{padding:3px 16px 12px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain}',
  '.kb-board{height:100%;min-height:0;display:flex;gap:12px;width:max-content;min-width:100%;padding-bottom:3px}',
  '.kb-board-column{width:270px;flex:0 0 270px;min-height:0;display:flex;flex-direction:column;border:1px solid var(--line);border-top:3px solid var(--status-color);border-radius:8px;background:var(--paper);overflow:hidden}',
@@ -75,7 +77,7 @@ globalThis.UbaitKanban=(()=>{
  function ensureStyle(){if(document.getElementById('kanban-board-style'))return;const s=document.createElement('style');s.id='kanban-board-style';s.textContent=css;document.head.append(s);}
  function mount(root,model,filters,{openStory=()=>{}}={}){
   ensureStyle();
-  const key=JSON.stringify([filters.search,filters.matchMode,...['stakeholder','direction','stream','department','ba','project'].map(k=>[filters[k],!!filters.exclude?.[k]])]);
+  const key=JSON.stringify([filters.search,filters.matchMode,filters.hideCompleted,filters.projectMin,filters.projectMax,filters.epicMin,filters.epicMax,...['projectYear','periods','stakeholder','direction','stream','department','ba','project'].map(k=>[filters[k],!!filters.exclude?.[k]])]);
   if(cachedModel!==model||cachedKey!==key){report=calculate(model,filters);cachedModel=model;cachedKey=key;limits.clear();}
   root._boardOpen=openStory;
   if(root._boardReport!==report){root.innerHTML=render(report,limits);root._boardReport=report;root.scrollLeft=0;}
