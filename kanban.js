@@ -77,7 +77,7 @@ globalThis.UbaitKanban=(()=>{
  function ensureStyle(){if(document.getElementById('kanban-board-style'))return;const s=document.createElement('style');s.id='kanban-board-style';s.textContent=css;document.head.append(s);}
  function mount(root,model,filters,{openStory=()=>{}}={}){
   ensureStyle();
-  const key=JSON.stringify([filters.search,filters.matchMode,filters.hideCompleted,filters.projectMin,filters.projectMax,filters.epicMin,filters.epicMax,...['projectYear','periods','stakeholder','direction','stream','department','ba','project'].map(k=>[filters[k],!!filters.exclude?.[k]])]);
+  const key=JSON.stringify([filters.search,filters.matchMode,filters.hideCompleted,filters.projectMin,filters.projectMax,filters.epicMin,filters.epicMax,filters.taskMin,filters.taskMax,...['projectYear','periods','stakeholder','direction','stream','department','ba','project'].map(k=>[filters[k],!!filters.exclude?.[k]])]);
   if(cachedModel!==model||cachedKey!==key){report=calculate(model,filters);cachedModel=model;cachedKey=key;limits.clear();}
   root._boardOpen=openStory;
   if(root._boardReport!==report){root.innerHTML=render(report,limits);root._boardReport=report;root.scrollLeft=0;}
