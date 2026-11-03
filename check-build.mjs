@@ -17,11 +17,14 @@ for(const name of ['errors.js','stat.js','kanban.js','hr.js','auth-client.js']){
   assert(html.includes(`src="/${name}"`),`Missing module ${name}`);
   new Script(await readFile(new URL('./'+name,import.meta.url),'utf8'),{filename:name});
 }
-for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','kanban-tab','hr-tab','v2.7.2 · 02.11']){
+for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','kanban-tab','hr-tab','v2.8.0 · 03.11']){
   assert(html.includes(text),`Current UI is missing: ${text}`);
 }
 assert(!html.includes('<select'),'Old native-select interface must not be packaged.');
 assert(html.includes('id="change-password"')&&html.includes('id="password-form"'),'Missing password change dialog.');
 new Script(await readFile(new URL('./pb_hooks/ubait-password.pb.js',import.meta.url),'utf8'),{filename:'ubait-password.pb.js'});
 assert(html.includes('href="/hr.css"'));assert((await readFile(new URL('./hr.css',import.meta.url),'utf8')).includes('.hr-subnav'));
+assert(html.includes('statistics-shell')&&html.includes('statistics-scrum-tab')&&html.includes('kanban-statistics-view'),'Missing Scrum / Kanban sub-tabs');
+assert((await readFile(new URL('./stat.js',import.meta.url),'utf8')).includes('globalThis.UbaitKanbanStatistics='),'Missing Kanban analytics');
+assert((await readFile(new URL('./kanban.js',import.meta.url),'utf8')).includes('data-board-task'),'Missing read-only Kanban board');
 console.log(`Build verified: Story Map ${BUILD_VERSION}`);
