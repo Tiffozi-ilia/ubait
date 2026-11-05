@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light"><meta name="robots" content="noindex,nofollow">
 <meta name="app-version" content="2026.11.05-v2.9.0">
-<meta name="ui-revision" content="R13-afct">
+<meta name="ui-revision" content="R14-afct-card-layout">
 <title>УБАИТ · Команда и продукты</title>
 <link rel="stylesheet" href="/hr.css">
 <style>
@@ -20,9 +20,11 @@ dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);bor
 .app-bar #change-password,.app-bar #logout{min-height:26px;padding:2px 8px;font-size:11px;flex-shrink:0}.password-dialog{width:min(440px,94vw)}.password-fields{border:0;margin:0;padding:18px 20px;display:grid;gap:14px}.password-fields label{display:grid;gap:6px;font-size:12px}.password-fields input{width:100%;border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:10px;font-size:14px}.password-fields .help{font-size:11px}.password-error{margin:0;font-size:12px;color:var(--danger)}.password-fields .action{margin-top:2px}@media(max-width:1000px){.app-bar .build-version{display:none}.app-bar #change-password{margin-left:auto}.app-tabs{min-width:0;overflow-x:auto;flex-shrink:1}.app-brand{flex-shrink:0}}
 .lane.collapsed .lane-rail{display:flex;align-items:center;gap:5px;padding:3px 0;min-height:30px}
 .lane.collapsed .lane-note{margin:0;font-size:9px}
-.story{height:106px}
-.story.wip{height:124px}
-.story-status{font-size:10px;line-height:12px;color:var(--blue);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+.story{height:auto;min-height:134px;flex-shrink:0}
+.story-title,.story-bottom{flex-shrink:0}
+.story-meta{display:flex;align-items:center;gap:6px;min-width:0;flex-shrink:0}
+.story-meta .afct-badge{margin-right:0;flex-shrink:0}
+.story-status{font-size:10px;line-height:12px;color:var(--blue);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
 .build-version{display:inline-block;font-size:10px;font-weight:400;color:var(--sub);margin-left:7px;vertical-align:middle;white-space:nowrap}
 .viewport{overflow-x:hidden;overflow-y:auto}
 .toolbar{padding-top:7px;padding-bottom:7px}.duration{white-space:nowrap;font-size:10px;color:var(--sub);font-variant-numeric:tabular-nums}.epic-footer{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 8px;flex-shrink:0}.epic-footer .progress{min-width:0;grid-column:1 / -1}.story-person{min-width:0}.story-stats{flex-shrink:0}
@@ -336,7 +338,7 @@ globalThis.StoryMapModel=(()=>{
  const save=()=>{try{localStorage.setItem('ubait-story-map-ui-v3',JSON.stringify(state));}catch{}};
  try{const saved=JSON.parse(localStorage.getItem('ubait-story-map-ui-v3')||'null');if(saved?.matchMode==='all')state.matchMode='all';for(const k of Object.keys(tabs))if(k!=='readiness'&&saved?.exclude?.[k]===true)state.exclude[k]=true;}catch{}
  const hasChanges=()=>JSON.stringify(state)!==JSON.stringify(M.defaults());
- function card(s){return `<button class="story ${s.lane} ${s.issues.length?'has-issue':''}" data-story="${s.id}" aria-label="${escape(s.title)}, ${s.lane==='wip'?escape(s.status)+', ':''}${percent(s.pct)}, длительность ${durationText(s)}">${s.issues.length?'<span class="issue-dot" aria-label="Есть замечания">●</span>':''}<span class="story-title">${globalThis.UbaitAFCT.badge(s)}${escape(s.title)}</span>${s.lane==='wip'?`<span class="story-status" title="${escape(s.status)}">${escape(s.status)}</span>`:''}<span class="story-bottom"><span class="story-person">${escape(s.ba)||'Аналитик не указан'}</span><span class="story-stats"><span class="percent">${percent(s.pct)}</span><span>${fmt(s.sp)} SP · ${duration(s)}</span></span></span></button>`;}
+ function card(s){const badge=globalThis.UbaitAFCT.badge(s);return `<button class="story ${s.lane} ${s.issues.length?'has-issue':''}" data-story="${s.id}" aria-label="${escape(s.title)}, ${s.lane==='wip'?escape(s.status)+', ':''}${percent(s.pct)}, длительность ${durationText(s)}">${s.issues.length?'<span class="issue-dot" aria-label="Есть замечания">●</span>':''}<span class="story-title">${escape(s.title)}</span>${badge||s.lane==='wip'?`<span class="story-meta">${s.lane==='wip'?`<span class="story-status" title="${escape(s.status)}">${escape(s.status)}</span>`:''}${badge}</span>`:''}<span class="story-bottom"><span class="story-person">${escape(s.ba)||'Аналитик не указан'}</span><span class="story-stats"><span class="percent">${percent(s.pct)}</span><span>${fmt(s.sp)} SP · ${duration(s)}</span></span></span></button>`;}
  function dimensions(){const css=getComputedStyle($('matrix'));return {col:parseFloat(css.getPropertyValue('--col'))||236,rail:parseFloat(css.getPropertyValue('--rail'))||76};}
  function renderWindow(force=false){
   if(view!=='map'||!model||!viewEpics.length)return;
@@ -350,7 +352,7 @@ globalThis.StoryMapModel=(()=>{
    // A lane keeps the SAME height across horizontal windows: no jumps while scrolling.
    const maxCards=closed?0:Math.max(0,...viewEpics.map(e=>Math.min(expanded.has(id+':'+e.id)?Infinity:20,e.visible.filter(s=>s.lane===id).length)));
    const more= !closed&&viewEpics.some(e=>!expanded.has(id+':'+e.id)&&e.visible.filter(s=>s.lane===id).length>20);
-   const height=closed?30:Math.max(42,20+maxCards*(id==='wip'?130:112)+(more?36:0));
+   const height=closed?30:Math.max(42,20+maxCards*140+(more?36:0));
    return `<section class="lane grid ${closed?'collapsed':''}" aria-label="${name}" style="min-height:${height}px"><div class="lane-rail" style="grid-column:1;grid-row:1"><button class="lane-toggle" data-lane="${id}" aria-expanded="${!closed}">${closed?'▸':'▾'} ${name}</button><div class="lane-note">${count}</div></div>${closed?'':visible.map((e,j)=>{const rows=e.visible.filter(s=>s.lane===id),k=id+':'+e.id,limit=expanded.has(k)?rows.length:20;return `<div class="cell ${rows.length?'':'empty'}" style="${style(lo+j)}">${rows.slice(0,limit).map(card).join('')}${rows.length>limit?`<button class="more" data-more="${escape(k)}">Ещё ${rows.length-limit}</button>`:''}</div>`;}).join('')}</section>`;
   }).join('')}`;
   $('matrix').style.width=Math.max(vp.clientWidth,rail+viewEpics.length*col)+'px';syncScroll();
