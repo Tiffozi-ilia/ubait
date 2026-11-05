@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light"><meta name="robots" content="noindex,nofollow">
-<meta name="app-version" content="2026.11.03-v2.8.2">
-<meta name="ui-revision" content="R12-stop-completion-task-range">
+<meta name="app-version" content="2026.11.05-v2.9.0">
+<meta name="ui-revision" content="R13-afct">
 <title>УБАИТ · Команда и продукты</title>
 <link rel="stylesheet" href="/hr.css">
 <style>
@@ -36,6 +36,9 @@ dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);bor
 @media(max-width:1000px){.toolbar{flex-wrap:wrap}.search{max-width:none}.meta{flex-wrap:wrap;gap:5px 10px}.meta .connection{margin-left:auto}.tags{max-width:100%}}
 @media(max-width:600px){:root{--col:220px;--rail:65px}.toolbar{padding:8px;gap:5px}.brand{font-size:14px}.search{flex-basis:55%}.action{font-size:11px;padding:5px 7px}.meta{padding:5px 8px}.viewport{margin:0 8px}.xbar{padding:5px 8px}.filter-layout{grid-template-columns:125px 1fr;height:62dvh}.filter-pane{padding:12px}.filter-tabs{padding:5px}.filter-tabs button{font-size:11px;padding:9px 5px}.dialog-top,.dialog-footer{padding:12px}.detail-body{padding:15px}.connection{display:none}}
 @media(max-width:600px){.app-bar{gap:8px;padding:0 8px}.app-bar .build-version{display:none}.app-bar #theme-toggle{margin-left:auto}.filter-layout{height:auto}.filter-logic{padding:8px 12px}}
+.afct-badge{display:inline-block;vertical-align:baseline;font-size:9px;font-weight:650;line-height:15px;padding:0 4px;margin-right:5px;border:1px solid var(--line);border-radius:4px;background:var(--soft);color:var(--accent);white-space:nowrap;letter-spacing:.03em}.afct-empty{color:var(--sub);background:var(--bg)}
+.afct-detail{margin:20px 0}.afct-detail>h3{font-size:14px;margin-bottom:10px}.afct-work-block{border:1px solid var(--line);border-radius:6px;padding:12px;margin:8px 0;background:var(--bg)}.afct-work-block h4{font-size:13px;margin:0 0 7px}.afct-work-items{margin-top:9px;font-size:12px;line-height:1.5}.afct-work-items>strong{font-size:11px;color:var(--sub)}.afct-work-items ul{margin:4px 0 0;padding-left:18px}.afct-work-items li+li{margin-top:4px}
+.afct-filter-block{padding:5px 0;border-bottom:1px solid var(--line)}.afct-filter-block>.depth-0{font-weight:650}.afct-option.depth-1{margin-left:22px}.afct-filter-section{margin:9px 6px 3px 28px;color:var(--sub);font-size:11px}.kb-board-task-id .afct-badge{float:right;margin-right:0}
 </style>
 <style>
 .loading-cover{position:fixed;inset:118px 0 0;z-index:9;display:grid;place-items:center;background:var(--bg)}.loading-box{text-align:center;display:flex;align-items:center;flex-direction:column;gap:16px;font-size:16px;font-weight:600}.spinner{width:48px;height:48px;border:4px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .9s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.spinner{animation-duration:2s}}
@@ -89,7 +92,7 @@ dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);bor
 <header class="app-bar">
  <h1 class="app-brand">УБАИТ</h1>
  <nav class="app-tabs" id="app-tabs" role="tablist" aria-label="Разделы приложения"><button class="app-tab" role="tab" id="story-map-tab" data-view="map" aria-selected="true" aria-controls="viewport">Story Map</button><button class="app-tab" role="tab" id="kanban-tab" data-view="kanban" aria-selected="false" aria-controls="kanban-view" tabindex="-1">Kanban</button><button class="app-tab" role="tab" id="statistics-tab" data-view="statistics" aria-selected="false" aria-controls="statistics-shell" tabindex="-1">Статистика</button><button class="app-tab" role="tab" id="hr-tab" data-view="hr" aria-selected="false" aria-controls="hr-view" tabindex="-1">HR</button><button class="app-tab" role="tab" id="errors-tab" data-view="errors" aria-selected="false" aria-controls="errors-view" tabindex="-1">Ошибки</button></nav>
- <span class="build-version" title="Сборка 2026.11.03-v2.8.2 · Kanban-доска и статистика Scrum / Kanban">v2.8.2 · 03.11</span>
+ <span class="build-version" title="Сборка 2026.11.05-v2.9.0 · Kanban-доска и статистика Scrum / Kanban">v2.9.0 · 05.11</span>
  <button class="action" id="logout" title="Выйти из аккаунта">Выйти</button>
  <button class="action" id="change-password" title="Сменить свой пароль">Сменить пароль</button>
  <button class="action" id="theme-toggle" title="Включить тёмную тему" aria-label="Включить тёмную тему">Светлая тема</button>
@@ -131,7 +134,7 @@ dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);bor
 <div class="loading-cover" id="loading-cover" role="status" aria-live="polite"><div class="loading-box"><span class="spinner" aria-hidden="true"></span><span id="loading-text">Загружаем данные…</span></div></div>
 <dialog class="filter-dialog" id="filter-dialog" aria-labelledby="filter-title">
  <div class="dialog-top"><h2 id="filter-title">Фильтры карты</h2><button class="action" id="cancel-filters">Отмена</button></div>
- <div class="filter-logic" id="filter-logic"><span>Связь разрезов</span><div class="segmented" role="group" aria-label="Как объединять фильтры"><button id="match-any" data-match="any" aria-pressed="true">Любое · ИЛИ</button><button id="match-all" data-match="all" aria-pressed="false">Все · И</button></div><p class="help">Стейкхолдер, направление, стрим, отдел, аналитик и проект. Исключения вычитаются всегда. Годы, периоды и готовность ограничивают результат отдельно.</p></div>
+ <div class="filter-logic" id="filter-logic"><span>Связь разрезов</span><div class="segmented" role="group" aria-label="Как объединять фильтры"><button id="match-any" data-match="any" aria-pressed="true">Любое · ИЛИ</button><button id="match-all" data-match="all" aria-pressed="false">Все · И</button></div><p class="help">Стейкхолдер, направление, стрим, отдел, аналитик, проект и АФКТ. Исключения вычитаются всегда. Годы, периоды и готовность ограничивают результат отдельно.</p></div>
  <div class="filter-layout"><nav class="filter-tabs" id="filter-tabs" aria-label="Категории фильтров"></nav><section class="filter-pane" id="filter-pane"></section></div>
  <div class="dialog-footer"><button class="action" id="reset-draft">Сбросить настройки</button><button class="action primary" id="apply-filters">Применить</button></div>
 </dialog>
@@ -154,6 +157,56 @@ dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);bor
 </dialog>
 <noscript>Для Story Map нужно включить JavaScript.</noscript>
 <script id="story-map-model">
+// Inlined into the existing model script; no extra browser asset or API request.
+globalThis.UbaitAFCT=(()=>{
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const norm=v=>String(v??'').trim().replace(/\s+/g,' ').toLocaleLowerCase('ru');
+ const values=v=>[...new Set((Array.isArray(v)?v:String(v??'').split(';')).map(v=>String(v).trim()).filter(v=>v&&norm(v)!=='не выбрано'))];
+ const blocks=[
+  {id:'a',letter:'А',title:'Анализ',fields:[['afct_a','Анализ']]},
+  {id:'f',letter:'Ф',title:'Формализация',fields:[['afct_f','Формализация'],['afct_ur','ПТ — пользовательские требования'],['afct_fr','ФТ — функциональные требования']]},
+  {id:'c',letter:'К',title:'Консультация',fields:[['afct_c','Консультация']]},
+  {id:'t',letter:'Т',title:'Тестирование',fields:[['afct_t','Тестирование']]}
+ ];
+ const childKey=(field,value)=>JSON.stringify([field,value]);
+ const choiceNames=new Map(blocks.map((b,i)=>[String(i+1),b.title]));
+ function read(row){
+  const available=Object.hasOwn(row,'afct'),chosen=values(row.afct).filter(v=>v!=='0').map(v=>choiceNames.get(v)||v),selected=blocks.filter(b=>chosen.some(v=>norm(v)===norm(b.title)));
+  const fields=Object.fromEntries(blocks.flatMap(b=>b.fields).map(([key])=>[key,values(row[key])]));
+  const facets=selected.flatMap(b=>[b.id,...b.fields.flatMap(([key])=>fields[key].map(v=>childKey(key,v)))]);
+  if(available&&!chosen.length)facets.push('none');
+  return {available,chosen,selected:selected.map(b=>b.id),fields,facets,code:selected.map(b=>b.letter).join('')};
+ }
+ function title(a){return blocks.filter(b=>a.selected.includes(b.id)).map(b=>b.title+b.fields.flatMap(([key])=>a.fields[key]).map(v=>'\n  '+v).join('')).join('\n')||'АФКТ не указан';}
+ function badge(task){const a=task?.afctData;if(!a?.available)return '';return '<span class="afct-badge'+(a.code?'':' afct-empty')+'" title="'+esc(title(a))+'" aria-label="АФКТ: '+esc(a.chosen.join(', ')||'не указан')+'">'+esc(a.code||'АФКТ —')+'</span>';}
+ function detail(task){
+  const a=task.afctData;if(!a?.available)return '';
+  return '<section class="afct-detail"><h3>Состав работ · АФКТ</h3>'+(!a.selected.length?'<p class="help">'+esc(a.chosen.join('; ')||'Не указан')+'</p>':blocks.filter(b=>a.selected.includes(b.id)).map(b=>'<section class="afct-work-block"><h4>'+esc(b.title)+'</h4>'+b.fields.map(([key,label])=>a.fields[key].length?'<div class="afct-work-items">'+(b.fields.length>1?'<strong>'+esc(label)+'</strong>':'')+'<ul>'+a.fields[key].map(v=>'<li>'+esc(v)+'</li>').join('')+'</ul></div>':'').join('')+(!b.fields.some(([key])=>a.fields[key].length)?'<p class="help">Подпункты не указаны</p>':'')+'</section>').join(''))+'</section>';
+ }
+ function options(model,chosen=[]){
+  const rows=[...model.stories.values()].map(s=>s.afctData).filter(Boolean),out=[];
+  for(const b of blocks){out.push({value:b.id,label:b.title,block:b.id,depth:0});
+   for(const [key,label] of b.fields){
+    const entries=new Set(rows.filter(a=>a.selected.includes(b.id)).flatMap(a=>a.fields[key]));
+    // A saved selected subcategory remains removable if it disappears in new data.
+    for(const value of chosen)try{const parsed=JSON.parse(value);if(Array.isArray(parsed)&&parsed[0]===key&&typeof parsed[1]==='string')entries.add(parsed[1]);}catch{}
+    for(const v of [...entries].sort((a,b)=>a.localeCompare(b,'ru')))out.push({value:childKey(key,v),label:v,block:b.id,field:key,section:label,depth:1});
+   }
+  }
+  out.push({value:'none',label:'Не указан',depth:0});return out;
+ }
+ function filterHTML(model,selected,query){
+  if(![...model.stories.values()].some(s=>s.afctData?.available)&&model.meta?.afct_revision!==1)return '<p class="help">АФКТ ещё не поступает с сервера. Обновите выдающий флоу Story Map.</p>';
+  const all=options(model,selected),needle=norm(query),check=o=>'<label class="option afct-option depth-'+o.depth+'"><input type="checkbox" name="facet" value="'+esc(o.value)+'" data-option="true" '+(selected.includes(o.value)?'checked':'')+'><span>'+esc(o.label)+'</span></label>';
+  return blocks.map(b=>{
+   const parent=all.find(o=>o.value===b.id),parentHit=!needle||norm(b.title).includes(needle),children=all.filter(o=>o.block===b.id&&o.depth&& (parentHit||norm(o.section+' '+o.label).includes(needle)));
+   if(!parentHit&&!children.length)return '';
+   let field='';return '<section class="afct-filter-block">'+check(parent)+children.map(o=>{const heading=b.fields.length>1&&field!==o.field?'<div class="afct-filter-section">'+esc(o.section)+'</div>':'';field=o.field;return heading+check(o);}).join('')+'</section>';
+  }).join('')+(!needle||norm('Не указан').includes(needle)?check(all.at(-1)):'')||'<p class="help">Нет подходящих значений.</p>';
+ }
+ return {blocks,read,badge,detail,options,filterHTML,childKey};
+})();
+
 /* Project-year is evaluated BEFORE story/facet filters, over all project members.
  * Story periods are ORed; included facets use selectable OR (default) / AND.
  * Excluded selections always subtract matches. Year/period/range gates stay independent.
@@ -170,9 +223,9 @@ globalThis.StoryMapModel=(()=>{
  const tokens=v=>[...new Set(text(v).split(';').map(text).filter(Boolean))];
  const directions=v=>[...new Set(tokens(v).map(s=>s.split('|')[0].trim()).filter(Boolean))];
  const cmp=(a,b)=>(b.pct??-Infinity)-(a.pct??-Infinity)||a.title.localeCompare(b.title,'ru');
- const cutKeys=['stakeholder','direction','stream','department','ba','project'];
+ const cutKeys=['stakeholder','direction','stream','department','ba','project','afct'];
  const currentYear=()=>new Intl.DateTimeFormat('en',{year:'numeric',timeZone:'Europe/Moscow'}).format(new Date());
- const defaults=()=>({search:'',projectYear:currentYear(),projectYearAuto:true,periods:[],stakeholder:[],direction:[],stream:[],department:[],ba:[],project:[],matchMode:'any',exclude:{},projectMin:0,projectMax:100,epicMin:0,epicMax:100,taskMin:0,taskMax:100,hideCompleted:true,issuesOnly:false,orphanOnly:false,collapsed:{done:true,wip:false,backlog:false,other:false}});
+ const defaults=()=>({search:'',projectYear:currentYear(),projectYearAuto:true,periods:[],stakeholder:[],direction:[],stream:[],department:[],ba:[],project:[],afct:[],matchMode:'any',exclude:{},projectMin:0,projectMax:100,epicMin:0,epicMax:100,taskMin:0,taskMax:100,hideCompleted:true,issuesOnly:false,orphanOnly:false,collapsed:{done:true,wip:false,backlog:false,other:false}});
  const positive=m=>monthKey(m.month)&&m.sp_utilized!==null&&m.sp_utilized>0;
  function inPeriod(month,period){if(!monthKey(month))return false;if(/^\d{4}\.Q[1-4]$/.test(period))return month.slice(0,4)===period.slice(0,4)&&Math.ceil(Number(month.slice(5))/3)===Number(period.at(-1));return month===period;}
  // Rebuild only affected epic totals from the complete, unfiltered response.
@@ -208,6 +261,7 @@ globalThis.StoryMapModel=(()=>{
    for(const k of ['stakeholder','stream','department','ba']){const value=k==='department'&&data.meta?.department_source!=='unit.team'?'':r[k];s[k]=text(value);s.facets[k]=tokens(value);}
    if(data.meta?.department_source!=='unit.team')s.issues.push('Источник отделов ещё не обновлён: нужен SQL со штаткой unit.team');
    else if(r.department_match&&r.department_match!=='matched')s.issues.push(({no_analyst:'Не указан аналитик',not_found:'ФИО аналитика не найдено в штатке',ambiguous:'В штатке несколько людей с одинаковым ФИО',no_department:'В штатной карточке не указан отдел'})[r.department_match]||'Отдел не сопоставлен');
+   s.afctData=globalThis.UbaitAFCT.read(r);s.facets.afct=s.afctData.facets;
    s.direction=text(r.direction);s.facets.direction=directions(r.direction);
    if(s.lane==='other')s.issues.push('Статус не сопоставлен с горизонталью: '+s.status);
    if(s.pct===null)s.issues.push('Нет месячного факта готовности');
@@ -232,13 +286,13 @@ globalThis.StoryMapModel=(()=>{
  function inRange(v,min,max){return v===null?(min===0&&max===100):v>=min&&v<=max;}
  function cutMatches(s,f){
   const include=[];
-  for(const k of cutKeys){if(!f[k].length)continue;const values=k==='project'?[s.project]:s.facets[k]||[];const hit=f[k].some(v=>values.includes(v));if(f.exclude?.[k]){if(hit)return false;}else include.push(hit);}
+  for(const k of cutKeys){if(!f[k]?.length)continue;const values=k==='project'?[s.project]:s.facets[k]||[];const hit=f[k].some(v=>values.includes(v));if(f.exclude?.[k]){if(hit)return false;}else include.push(hit);}
   return !include.length||(f.matchMode==='all'?include.every(Boolean):include.some(Boolean));
  }
  function matches(s,f){const periodHit=s.months.some(m=>positive(m)&&f.periods.some(p=>inPeriod(m.month,p)));return cutMatches(s,f)&&inRange(s.pct,f.taskMin??0,f.taskMax??100)&&(!f.periods.length||(f.exclude?.periods?!periodHit:periodHit))&&(!f.search||s.search.includes(f.search.trim().toLocaleLowerCase('ru')))&&(!f.issuesOnly||s.issues.length>0);}
  function groups(model,input={},{includeUnassigned=false}={}){
   const f={...defaults(),...input};
-  const narrowed=!!f.search||f.issuesOnly||f.periods.length||f.taskMin!==0||f.taskMax!==100;
+  const narrowed=!!f.search||f.issuesOnly||f.periods.length||f.afct.length>0||f.taskMin!==0||f.taskMax!==100;
   return model.projects.filter(p=>(!f.projectYear||(f.exclude?.projectYear?!p.years.has(f.projectYear):p.years.has(f.projectYear)))&&(!f.hideCompleted||p.pct===null||Math.abs(p.pct-100)>1e-8)&&inRange(p.pct,f.projectMin,f.projectMax))
    .map(p=>({...p,epics:p.epics.filter(e=>(f.orphanOnly?e.id==='unassigned':includeUnassigned||e.id!=='unassigned')&&inRange(e.pct,f.epicMin,f.epicMax)).map(e=>({...e,visible:e.stories.filter(s=>matches(s,f))})).filter(e=>e.visible.length||(!narrowed&&!e.stories.length&&cutMatches({project:p.id,facets:{}},f)))})).filter(p=>p.epics.length);
  }
@@ -269,20 +323,20 @@ globalThis.StoryMapModel=(()=>{
  const date=v=>{if(!v)return'—';const d=new Date(v);return Number.isNaN(+d)?String(v):new Intl.DateTimeFormat('ru-RU',{dateStyle:'short',timeStyle:'short'}).format(d);};
  const periodLabel=p=>p.includes('.Q')?p.slice(0,4)+' · '+['I','II','III','IV'][Number(p.at(-1))-1]+' квартал':/^\d{4}\.\d{2}$/.test(p)?new Intl.DateTimeFormat('ru-RU',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(p.slice(0,4)+'-'+p.slice(5)+'-01T12:00:00Z')):p;
  const bar=(v,label)=>`<div class="progress"><div class="track" role="progressbar" aria-label="${escape(label)}" ${v==null?'':`aria-valuenow="${Math.max(0,Math.min(100,v))}"`} aria-valuemin="0" aria-valuemax="100"><div class="fill" style="width:${v==null?0:Math.max(0,Math.min(100,v))}%"></div></div><span>${percent(v)}</span></div>`;
- const tabs={projectYear:'Год проектов',periods:'Период историй',stakeholder:'Стейкхолдер',direction:'Направление',stream:'Стрим',department:'Отдел',ba:'Аналитик',project:'Проект',readiness:'Готовность'};
+ const tabs={projectYear:'Год проектов',periods:'Период историй',stakeholder:'Стейкхолдер',direction:'Направление',stream:'Стрим',department:'Отдел',ba:'Аналитик',project:'Проект',afct:'АФКТ',readiness:'Готовность'};
  const state=M.defaults();let model=null,errorModel=null,statisticsModel=null,errorCoverage=false,view='map',errorLimit=60,loading=false,draft=null,tab='stakeholder',optionSearch='',expanded=new Set(),viewGroups=[],viewEpics=[],windowKey='',raf=0,searchTimer;
  let statisticsMode='scrum';
  const isScrum=()=>view==='statistics'&&statisticsMode==='scrum';
  const isKanbanAnalytics=()=>view==='statistics'&&statisticsMode==='kanban';
  const statsState={grain:'month',groupBy:'ba',metric:'sp',fteBasis:'scope',focusPeriod:'',sort:'value',chartPage:null,detailId:null,detailLimit:40};let statsReport=null;
- try{const saved=JSON.parse(localStorage.getItem('ubait-story-map-ui-v3')||'null');if(saved){state.projectYearAuto=saved.projectYearAuto!==false;for(const k of ['search','projectYear'])if(typeof saved[k]==='string')state[k]=saved[k];if(state.projectYearAuto)state.projectYear=M.currentYear();for(const k of ['periods','stakeholder','direction','stream','department','ba','project'])if(Array.isArray(saved[k]))state[k]=saved[k].filter(x=>typeof x==='string');for(const k of ['hideCompleted','issuesOnly','orphanOnly'])if(typeof saved[k]==='boolean')state[k]=saved[k];for(const k of ['projectMin','projectMax','epicMin','epicMax','taskMin','taskMax'])if(Number.isFinite(saved[k]))state[k]=Math.max(0,Math.min(100,saved[k]));for(const k of Object.keys(state.collapsed))if(typeof saved.collapsed?.[k]==='boolean')state.collapsed[k]=saved.collapsed[k];if(state.projectMin>state.projectMax)[state.projectMin,state.projectMax]=[state.projectMax,state.projectMin];if(state.epicMin>state.epicMax)[state.epicMin,state.epicMax]=[state.epicMax,state.epicMin];if(state.taskMin>state.taskMax)[state.taskMin,state.taskMax]=[state.taskMax,state.taskMin];}}catch{}
+ try{const saved=JSON.parse(localStorage.getItem('ubait-story-map-ui-v3')||'null');if(saved){state.projectYearAuto=saved.projectYearAuto!==false;for(const k of ['search','projectYear'])if(typeof saved[k]==='string')state[k]=saved[k];if(state.projectYearAuto)state.projectYear=M.currentYear();for(const k of ['periods','stakeholder','direction','stream','department','ba','project','afct'])if(Array.isArray(saved[k]))state[k]=saved[k].filter(x=>typeof x==='string');for(const k of ['hideCompleted','issuesOnly','orphanOnly'])if(typeof saved[k]==='boolean')state[k]=saved[k];for(const k of ['projectMin','projectMax','epicMin','epicMax','taskMin','taskMax'])if(Number.isFinite(saved[k]))state[k]=Math.max(0,Math.min(100,saved[k]));for(const k of Object.keys(state.collapsed))if(typeof saved.collapsed?.[k]==='boolean')state.collapsed[k]=saved.collapsed[k];if(state.projectMin>state.projectMax)[state.projectMin,state.projectMax]=[state.projectMax,state.projectMin];if(state.epicMin>state.epicMax)[state.epicMin,state.epicMax]=[state.epicMax,state.epicMin];if(state.taskMin>state.taskMax)[state.taskMin,state.taskMax]=[state.taskMax,state.taskMin];}}catch{}
  // Upgrade defaults once: the new version starts with today's year, not a
  // previously saved empty year. Explicit choices are preserved thereafter.
 
  const save=()=>{try{localStorage.setItem('ubait-story-map-ui-v3',JSON.stringify(state));}catch{}};
  try{const saved=JSON.parse(localStorage.getItem('ubait-story-map-ui-v3')||'null');if(saved?.matchMode==='all')state.matchMode='all';for(const k of Object.keys(tabs))if(k!=='readiness'&&saved?.exclude?.[k]===true)state.exclude[k]=true;}catch{}
  const hasChanges=()=>JSON.stringify(state)!==JSON.stringify(M.defaults());
- function card(s){return `<button class="story ${s.lane} ${s.issues.length?'has-issue':''}" data-story="${s.id}" aria-label="${escape(s.title)}, ${s.lane==='wip'?escape(s.status)+', ':''}${percent(s.pct)}, длительность ${durationText(s)}">${s.issues.length?'<span class="issue-dot" aria-label="Есть замечания">●</span>':''}<span class="story-title">${escape(s.title)}</span>${s.lane==='wip'?`<span class="story-status" title="${escape(s.status)}">${escape(s.status)}</span>`:''}<span class="story-bottom"><span class="story-person">${escape(s.ba)||'Аналитик не указан'}</span><span class="story-stats"><span class="percent">${percent(s.pct)}</span><span>${fmt(s.sp)} SP · ${duration(s)}</span></span></span></button>`;}
+ function card(s){return `<button class="story ${s.lane} ${s.issues.length?'has-issue':''}" data-story="${s.id}" aria-label="${escape(s.title)}, ${s.lane==='wip'?escape(s.status)+', ':''}${percent(s.pct)}, длительность ${durationText(s)}">${s.issues.length?'<span class="issue-dot" aria-label="Есть замечания">●</span>':''}<span class="story-title">${globalThis.UbaitAFCT.badge(s)}${escape(s.title)}</span>${s.lane==='wip'?`<span class="story-status" title="${escape(s.status)}">${escape(s.status)}</span>`:''}<span class="story-bottom"><span class="story-person">${escape(s.ba)||'Аналитик не указан'}</span><span class="story-stats"><span class="percent">${percent(s.pct)}</span><span>${fmt(s.sp)} SP · ${duration(s)}</span></span></span></button>`;}
  function dimensions(){const css=getComputedStyle($('matrix'));return {col:parseFloat(css.getPropertyValue('--col'))||236,rail:parseFloat(css.getPropertyValue('--rail'))||76};}
  function renderWindow(force=false){
   if(view!=='map'||!model||!viewEpics.length)return;
@@ -302,7 +356,7 @@ globalThis.StoryMapModel=(()=>{
   $('matrix').style.width=Math.max(vp.clientWidth,rail+viewEpics.length*col)+'px';syncScroll();
  }
  function syncScroll(){const vp=$('viewport'),max=Math.max(0,vp.scrollWidth-vp.clientWidth),range=$('horizontal-scroll');range.disabled=max===0;range.value=max?Math.round(vp.scrollLeft/max*10000):0;range.style.setProperty('--thumb',Math.max(24,Math.min(140,range.clientWidth*vp.clientWidth/Math.max(1,vp.scrollWidth)))+'px');$('scroll-left').disabled=vp.scrollLeft<1;$('scroll-right').disabled=vp.scrollLeft>=max-1;$('scroll-label').textContent=viewEpics.length?viewEpics.length+' эпиков':'';}
- function tags(){const list=[];if((view==='map'||view==='kanban')&&state.hideCompleted)list.push(['hideCompleted','Проекты < 100%']);let cuts=0;for(const k of ['stakeholder','direction','stream','department','ba','project'])if(state[k].length){list.push([k,(state.exclude[k]?'− ':'+ ')+tabs[k]+': '+state[k].length]);if(!state.exclude[k])cuts++;}if(cuts>1)list.push(['matchMode',state.matchMode==='all'?'Разрезы: И':'Разрезы: ИЛИ']);if(view!=='statistics')for(const prefix of view==='map'||view==='kanban'?['project','epic','task']:['project','epic'])if(state[prefix+'Min']!==0||state[prefix+'Max']!==100)list.push([prefix+'Range',({project:'Проекты',epic:'Эпики',task:'Задачи'}[prefix])+': '+state[prefix+'Min']+'–'+state[prefix+'Max']+'%']);return list;}
+ function tags(){const list=[];if((view==='map'||view==='kanban')&&state.hideCompleted)list.push(['hideCompleted','Проекты < 100%']);let cuts=0;for(const k of ['stakeholder','direction','stream','department','ba','project','afct'])if(state[k].length){list.push([k,(state.exclude[k]?'− ':'+ ')+tabs[k]+': '+state[k].length]);if(!state.exclude[k])cuts++;}if(cuts>1)list.push(['matchMode',state.matchMode==='all'?'Разрезы: И':'Разрезы: ИЛИ']);if(view!=='statistics')for(const prefix of view==='map'||view==='kanban'?['project','epic','task']:['project','epic'])if(state[prefix+'Min']!==0||state[prefix+'Max']!==100)list.push([prefix+'Range',({project:'Проекты',epic:'Эпики',task:'Задачи'}[prefix])+': '+state[prefix+'Min']+'–'+state[prefix+'Max']+'%']);return list;}
  function renderOther(){
   $('message').hidden=true;
   if(view==='kanban'){const r=globalThis.UbaitKanban.mount($('kanban-view'),model,state,{openStory});$('counts').textContent=r.scope.length+' задач в разрезе';$('reset').disabled=false;return;}
@@ -330,7 +384,7 @@ globalThis.StoryMapModel=(()=>{
   $('story-period').textContent=(isScrum()?'Период · ':'Период историй · ')+(state.periods.length&&state.exclude.periods?'Кроме ':'')+(state.periods.length===1?periodLabel(state.periods[0]):state.periods.length||'Все');$('story-period').classList.toggle('active',!!state.periods.length);$('story-period').title=isScrum()?'Ограничить месячный факт выбранными периодами':'Истории с утилизацией в месяце или квартале';
   $('orphan-view').textContent='Без эпика · '+(model.epics.get('unassigned')?.stories.length||0);$('orphan-view').classList.toggle('active',state.orphanOnly);
   $('issues-view').classList.toggle('active',state.issuesOnly);$('active-tags').innerHTML=tags().map(([k,v])=>`<button class="tag" data-clear="${k}" title="Снять условие">${escape(v)} ×</button>`).join('');
-  const activeCuts=['stakeholder','direction','stream','department','ba','project'].filter(k=>state[k].length).length;$('filters-button').textContent='Фильтры'+(view==='statistics'&&activeCuts?' · '+activeCuts:'');$('filters-button').title=view==='statistics'?tags().map(([,v])=>v).join(' · ')||'Все разрезы':'Открыть фильтры';
+  const activeCuts=['stakeholder','direction','stream','department','ba','project','afct'].filter(k=>state[k].length).length;$('filters-button').textContent='Фильтры'+(view==='statistics'&&activeCuts?' · '+activeCuts:'');$('filters-button').title=view==='statistics'?tags().map(([,v])=>v).join(' · ')||'Все разрезы':'Открыть фильтры';
   $('reset').disabled=!hasChanges();$('search').value=state.search;expanded=resetPosition?new Set():expanded;windowKey='';
   $('matrix').style.setProperty('--cols',viewEpics.length);
   if(resetPosition){$('viewport').scrollLeft=0;$('viewport').scrollTop=0;}
@@ -344,7 +398,7 @@ globalThis.StoryMapModel=(()=>{
   $('match-any').setAttribute('aria-pressed',String(draft.matchMode==='any'));$('match-all').setAttribute('aria-pressed',String(draft.matchMode==='all'));
   $('filter-tabs').innerHTML=Object.entries(tabs).filter(([k])=>isKanbanAnalytics()?!['projectYear','periods','readiness'].includes(k):!isScrum()||k!=='readiness').map(([k,label])=>{const n=Array.isArray(draft[k])?draft[k].length:k==='projectYear'?draft[k]:'';return `<button data-tab="${k}" aria-selected="${k===tab}"><span>${view==='statistics'&&k==='projectYear'?'Год факта':label}</span><small>${n?(draft.exclude[k]?'− ':'')+n:''}</small></button>`;}).join('');
   if(tab==='readiness'){$('filter-pane').innerHTML=`<h3>Готовность</h3><p class="help">Независимые диапазоны. Фильтр задач убирает пустые колонки, но не меняет проценты проектов и эпиков.</p>${(view==='map'||view==='kanban'?['project','epic','task']:['project','epic']).map(p=>`<div class="range-group"><strong>${{project:'Проекты',epic:'Эпики',task:'Задачи'}[p]}</strong>${['Min','Max'].map((bound,i)=>`<label class="range-inputs">${i?'До':'От'}<input type="range" min="0" max="100" step="0.1" value="${draft[p+bound]}" data-range="${p+bound}" aria-label="${{project:'Проекты',epic:'Эпики',task:'Задачи'}[p]}: ${i?'до':'от'} процентов"><input type="number" min="0" max="100" step="0.1" value="${draft[p+bound]}" data-number="${p+bound}" aria-label="${{project:'Проекты',epic:'Эпики',task:'Задачи'}[p]}: ${i?'максимум':'минимум'}"></label>`).join('')}</div>`).join('')}${view==='map'||view==='kanban'?`<label class="option"><input type="checkbox" data-flag="hideCompleted" ${draft.hideCompleted?'checked':''}><span>Скрывать проекты с готовностью 100%</span></label>`:''}<p class="help">Без рассчитанного процента: показываются при полном диапазоне 0–100%; при сужении диапазона скрываются.</p>`;return;}
-  const help=tab==='projectYear'?(isScrum()?'Год месячного факта задач. Ограничивает сумму SP, но не исключает аналитиков с нулём за период.':view==='errors'?'Год утилизации любой истории проекта. У задач без проекта — год их собственного факта. STOP и Trash участвуют в проверке.':'Признак года — положительная утилизация хотя бы одной истории проекта. «Включить» оставляет весь такой проект; «Исключить» убирает весь такой проект.'):tab==='periods'?(view==='statistics'?'Суммируется факт только выбранных месяцев или кварталов. Аналитики без работы в периоде остаются с 0 SP.':'Признак периода — положительная утилизация истории хотя бы в одном выбранном месяце или квартале. Кварталы объединяют месячный факт.'):'Внутри списка — любое из выбранных значений. «Исключить» убирает совпавшие истории независимо от других фильтров.';
+  const help=tab==='afct'?'Блок выбирает все задачи с этим видом работ, подпункт — только задачи с ним. Внутри АФКТ — любое из выбранного. Исключения убирают совпадения.':tab==='projectYear'?(isScrum()?'Год месячного факта задач. Ограничивает сумму SP, но не исключает аналитиков с нулём за период.':view==='errors'?'Год утилизации любой истории проекта. У задач без проекта — год их собственного факта. STOP и Trash участвуют в проверке.':'Признак года — положительная утилизация хотя бы одной истории проекта. «Включить» оставляет весь такой проект; «Исключить» убирает весь такой проект.'):tab==='periods'?(view==='statistics'?'Суммируется факт только выбранных месяцев или кварталов. Аналитики без работы в периоде остаются с 0 SP.':'Признак периода — положительная утилизация истории хотя бы в одном выбранном месяце или квартале. Кварталы объединяют месячный факт.'):'Внутри списка — любое из выбранных значений. «Исключить» убирает совпавшие истории независимо от других фильтров.';
   $('filter-pane').innerHTML=`<h3>${view==='statistics'&&tab==='projectYear'?'Год факта':tabs[tab]}</h3><p class="help">${help}</p><div class="filter-mode"><div class="segmented" role="group" aria-label="Режим фильтра"><button data-filter-mode="include" aria-pressed="${!draft.exclude[tab]}">Включить</button><button data-filter-mode="exclude" aria-pressed="${!!draft.exclude[tab]}">Исключить</button></div></div><input class="options-search" id="option-search" type="search" placeholder="Найти значение…" aria-label="Поиск по значениям фильтра" value="${escape(optionSearch)}"><div class="filter-tools"><button data-filter-clear="true">${tab==='projectYear'?'Все годы':'Снять выбор'}</button></div><div class="options-list" id="options-list"></div>`;
   renderOptions();$('option-search').addEventListener('input',e=>{optionSearch=e.target.value;renderOptions();});
  }
@@ -355,9 +409,9 @@ globalThis.StoryMapModel=(()=>{
   if(key==='periods'&&view!=='map'&&view!=='kanban')return [...new Set(months.flatMap(m=>[m,m.slice(0,4)+'.Q'+Math.ceil(Number(m.slice(5))/3)]))].sort().reverse();
   return values;
  }
- function renderOptions(){const values=filterOptions(tab).filter(v=>(tab==='periods'?periodLabel(v):v).toLocaleLowerCase('ru').includes(optionSearch.toLocaleLowerCase('ru')));$('options-list').innerHTML=values.length?values.map(v=>`<label class="option"><input type="${tab==='projectYear'?'radio':'checkbox'}" name="facet" value="${escape(v)}" data-option="true" ${(tab==='projectYear'?draft[tab]===v:draft[tab].includes(v))?'checked':''}><span>${escape(tab==='periods'?periodLabel(v):v)}</span></label>`).join(''):'<p class="help">Нет подходящих значений.</p>';}
+ function renderOptions(){if(tab==='afct'){const source=view==='errors'?errorModel:isScrum()?statisticsModel:model;$('options-list').innerHTML=globalThis.UbaitAFCT.filterHTML(source,draft.afct,optionSearch);return;}const values=filterOptions(tab).filter(v=>(tab==='periods'?periodLabel(v):v).toLocaleLowerCase('ru').includes(optionSearch.toLocaleLowerCase('ru')));$('options-list').innerHTML=values.length?values.map(v=>`<label class="option"><input type="${tab==='projectYear'?'radio':'checkbox'}" name="facet" value="${escape(v)}" data-option="true" ${(tab==='projectYear'?draft[tab]===v:draft[tab].includes(v))?'checked':''}><span>${escape(tab==='periods'?periodLabel(v):v)}</span></label>`).join(''):'<p class="help">Нет подходящих значений.</p>';}
  const row=(k,v)=>`<dt>${escape(k)}</dt><dd>${escape(v??'—')}</dd>`;
- function openStory(id){const activeModel=view==='errors'?errorModel:isScrum()?statisticsModel:model,s=activeModel.stories.get(id);if(!s)return;const e=activeModel.epics.get(s.epic_id);$('detail-id').textContent='#'+s.id;$('detail-body').innerHTML=`<h2 class="detail-title" id="detail-title">${escape(s.title)}</h2><p class="detail-path">${escape(s.project)} → ${escape(e.title)}</p>${bar(s.pct,'Готовность истории')}<dl class="detail-grid">${row('Статус',s.status)}${row('Аналитик',s.ba||'—')}${row('SP',fmt(s.sp))}${row('Освоено SP',fmt(s.used))}${row('Начало анализа',day(s.start))}${row('Завершение',day(s.end))}${row('Длительность, дней',durationDays(s))}${row('Стейкхолдер',s.stakeholder||'—')}${row('Направление',s.facets.direction.join('; ')||'—')}${row('Стрим',s.stream||'—')}${row('Отдел',s.department||'—')}${row('Обновлено в Pyrus',date(s.modified_at))}</dl><p class="help">${escape(durationHint(s))}</p>${s.issues.map(i=>`<p class="warning">${escape(i)}</p>`).join('')}${[['Я как…',s.i_as],['Хочу…',s.want],['Чтобы…',s.so_that]].filter(([,v])=>v).map(([k,v])=>`<div class="text-block"><strong>${k}</strong>${escape(v)}</div>`).join('')}${s.months.length?`<table class="sprint-table"><caption>Месячный факт</caption><thead><tr><th>Месяц</th><th>Старт %</th><th>Конец %</th><th>Освоено SP</th></tr></thead><tbody>${s.months.map(m=>`<tr><td>${escape(m.month)}</td><td>${fmt(m.start)}</td><td>${fmt(m.end)}</td><td>${fmt(m.sp_utilized)}</td></tr>`).join('')}</tbody></table>`:''}<p class="text-block"><a href="https://pyrus.sovcombank.ru/t#id${s.id}" target="_blank" rel="noopener noreferrer">Открыть историю в Pyrus ↗</a></p>`;$('detail').showModal();}
+ function openStory(id){const activeModel=view==='errors'?errorModel:isScrum()?statisticsModel:model,s=activeModel.stories.get(id);if(!s)return;const e=activeModel.epics.get(s.epic_id);$('detail-id').textContent='#'+s.id;$('detail-body').innerHTML=`<h2 class="detail-title" id="detail-title">${escape(s.title)}</h2><p class="detail-path">${escape(s.project)} → ${escape(e.title)}</p>${bar(s.pct,'Готовность истории')}<dl class="detail-grid">${row('Статус',s.status)}${row('Аналитик',s.ba||'—')}${row('SP',fmt(s.sp))}${row('Освоено SP',fmt(s.used))}${row('Начало анализа',day(s.start))}${row('Завершение',day(s.end))}${row('Длительность, дней',durationDays(s))}${row('Стейкхолдер',s.stakeholder||'—')}${row('Направление',s.facets.direction.join('; ')||'—')}${row('Стрим',s.stream||'—')}${row('Отдел',s.department||'—')}${row('Обновлено в Pyrus',date(s.modified_at))}</dl><p class="help">${escape(durationHint(s))}</p>${globalThis.UbaitAFCT.detail(s)}${s.issues.map(i=>`<p class="warning">${escape(i)}</p>`).join('')}${[['Я как…',s.i_as],['Хочу…',s.want],['Чтобы…',s.so_that]].filter(([,v])=>v).map(([k,v])=>`<div class="text-block"><strong>${k}</strong>${escape(v)}</div>`).join('')}${s.months.length?`<table class="sprint-table"><caption>Месячный факт</caption><thead><tr><th>Месяц</th><th>Старт %</th><th>Конец %</th><th>Освоено SP</th></tr></thead><tbody>${s.months.map(m=>`<tr><td>${escape(m.month)}</td><td>${fmt(m.start)}</td><td>${fmt(m.end)}</td><td>${fmt(m.sp_utilized)}</td></tr>`).join('')}</tbody></table>`:''}<p class="text-block"><a href="https://pyrus.sovcombank.ru/t#id${s.id}" target="_blank" rel="noopener noreferrer">Открыть историю в Pyrus ↗</a></p>`;$('detail').showModal();}
  function openEpic(id){const e=(view==='errors'?errorModel:model).epics.get(id);if(!e)return;$('detail-id').textContent=e.code||'Эпик';$('detail-body').innerHTML=`<h2 class="detail-title" id="detail-title">${escape(e.title)}</h2><p class="detail-path">${escape(e.project)}</p>${bar(e.pct,'Готовность эпика')}${e.titleMissing&&!e.missing?'<p class="warning">Название epic ещё не загружено. Выполните разовое заполнение названий из комплекта.</p>':''}<dl class="detail-grid">${row('Историй всего',e.completionTaskCount??e.stories.length)}${e.stoppedCount?row('Из них STOP',e.stoppedCount):''}${view==='map'?row('Историй по фильтрам',viewEpics.find(v=>v.id===id)?.visible.length??0):''}${row('SP эпика',fmt(e.sp))}${row('Освоено SP',fmt(e.used))}${row('Осталось SP',fmt(e.sp_undone))}${row('Начало',day(e.start))}${row('Завершение',day(e.end))}${row('Длительность, дней',durationDays(e))}${row('Код задачи эпика',e.reference)}</dl><p class="help">${escape(durationHint(e))}</p><p class="text-block">${escape(e.description||'')}</p>${/^\d+$/.test(id)?`<a href="https://pyrus.sovcombank.ru/t#id${id}" target="_blank" rel="noopener noreferrer">Открыть эпик в Pyrus ↗</a>`:''}`;$('detail').showModal();}
  async function load(){
   if(loading)return;loading=true;$('refresh').disabled=true;$('connection').textContent='Обновление…';$('loading-cover').hidden=!!model;$('story-map-panel').setAttribute('aria-busy','true');

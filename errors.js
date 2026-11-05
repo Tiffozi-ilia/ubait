@@ -35,12 +35,12 @@ globalThis.StoryMapErrors = (() => {
     const columns=rules.map(rule=>({id:rule.id,title:rule.title,description:rule.description,epic:!!rule.epic,items:[]}));
     for(let i=0;i<rules.length;i++){
       const rule=rules[i];
-      if(!rule.epic){columns[i].items=eligible.filter(rule.test).map(s=>({id:s.id,kind:'story',title:s.title,ba:s.ba,status:s.status,sp:s.sp,pct:s.pct,reason:rule.reason(s),month:s.months.at(-1)?.month||null}));continue;}
+      if(!rule.epic){columns[i].items=eligible.filter(rule.test).map(s=>({id:s.id,kind:'story',afctData:s.afctData,title:s.title,ba:s.ba,status:s.status,sp:s.sp,pct:s.pct,reason:rule.reason(s),month:s.months.at(-1)?.month||null}));continue;}
       for(const e of model.epics.values()){
         if(e.missing||e.project!=='Без проекта'||!readiness(e.project,e)||!byYear(ownYears(e.stories)))continue;
         // Facets/periods require at least one matching member. Empty epics can
         // be inspected with all years and no story-level filter selections.
-        const noStoryFilter=!f.periods.length&&!['stakeholder','direction','stream','department','ba'].some(k=>f[k].length);
+        const noStoryFilter=!f.periods.length&&!['stakeholder','direction','stream','department','ba','afct'].some(k=>f[k].length);
         const query=f.search.trim().toLocaleLowerCase('ru');
         const epicHit=!query||[e.id,e.title,e.code,e.reference].join(' ').toLocaleLowerCase('ru').includes(query);
         const memberHit=e.stories.some(s=>common({...s,search:epicHit?' '+query:s.search}));
@@ -56,7 +56,7 @@ globalThis.StoryMapErrors = (() => {
   function render(result,{escape,fmt,limit=60}) {
     const columns=result.columns.filter(c=>c.items.length);
     if(!columns.length)return '<div class="empty-state">По выбранным условиям ошибок не найдено.</div>';
-    return `<div class="error-board">${columns.map(c=>`<section class="error-column"><header><h2>${escape(c.title)} <span>${c.items.length}</span></h2><p>${escape(c.description)}</p></header><div class="error-list">${c.items.slice(0,limit).map(i=>`<button class="error-card" data-${i.kind}="${escape(i.id)}"><strong>${escape(i.title)}</strong><span class="error-reason">${escape(i.reason)}</span>${i.month?`<small>Последний месяц: ${escape(i.month)}</small>`:''}<span class="error-card-footer"><span>${escape(i.ba|| (i.kind==='epic'?i.memberCount+' историй':'Аналитик не указан'))}</span><span>${fmt(i.sp)} SP</span></span></button>`).join('')}${c.items.length>limit?`<button class="more" data-error-more="true">Показать ещё (${c.items.length-limit})</button>`:''}</div></section>`).join('')}</div>`;
+    return `<div class="error-board">${columns.map(c=>`<section class="error-column"><header><h2>${escape(c.title)} <span>${c.items.length}</span></h2><p>${escape(c.description)}</p></header><div class="error-list">${c.items.slice(0,limit).map(i=>`<button class="error-card" data-${i.kind}="${escape(i.id)}"><strong>${globalThis.UbaitAFCT.badge(i)}${escape(i.title)}</strong><span class="error-reason">${escape(i.reason)}</span>${i.month?`<small>Последний месяц: ${escape(i.month)}</small>`:''}<span class="error-card-footer"><span>${escape(i.ba|| (i.kind==='epic'?i.memberCount+' историй':'Аналитик не указан'))}</span><span>${fmt(i.sp)} SP</span></span></button>`).join('')}${c.items.length>limit?`<button class="more" data-error-more="true">Показать ещё (${c.items.length-limit})</button>`:''}</div></section>`).join('')}</div>`;
   }
   return {rules,evaluate,render,worked};
 })();
