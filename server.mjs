@@ -98,7 +98,55 @@ export function createCompetencyDocs({fetchImpl=fetch,now=Date.now,timeoutMs=600
   };
 }
 
-export const BUILD_VERSION='2026.11.05-v2.9.0';
+export const BUILD_VERSION='2026.11.09-v2.9.1';
+
+export function isSkillHistoryRequest(taskId,kind,matrixId){
+  return typeof taskId==='string'&&/^[1-9][0-9]{0,18}$/.test(taskId)&&BigInt(taskId)<=9223372036854775807n&&
+    ['employee','boss'].includes(kind)&&isCompetencyId(matrixId)&&matrixId.startsWith(kind==='employee'?'03.01.01.':'03.01.02.');
+}
+export function scopeSkillHistory(payload,card,kind,matrixId){
+  const bad=()=>{throw Object.assign(new Error('История оценок временно недоступна.'),{status:503});};
+  if(payload?.schema_version!==1||payload.dataset!=='hr_skill_history'||payload.source_form_id!==405691||
+    payload.task_id!==card.unit.task_id||payload.skill_block!==kind||payload.matrix_id!==matrixId||
+    !Array.isArray(payload.entries)||payload.entries.length>10000)bad();
+  const ids=new Set(),entries=[];
+  const validGrade=g=>g===null||(typeof g==='string'&&/^[ABC][+-]?$/.test(g));
+  const date=d=>typeof d==='string'&&/^\d{4}-\d\d-\d\dT.*(?:Z|[+-]\d\d:\d\d)$/.test(d)&&Number.isFinite(Date.parse(d));
+  for(const r of payload.entries){
+    if(!r||typeof r.id!=='string'||! /^[1-9][0-9]{0,18}$/.test(r.id)||ids.has(r.id)||
+      r.task_id!==card.unit.task_id||r.skill_block!==kind||r.matrix_id!==matrixId||
+      !(r.staff_id===null||(typeof r.staff_id==='string'&&/^[1-9][0-9]*$/.test(r.staff_id)))||
+      typeof r.is_reference!=='boolean'||typeof r.is_baseline!=='boolean'||
+      !validGrade(r.current_grade)||!validGrade(r.target_grade)||!date(r.created_at)||!date(r.recorded_at))bad();
+    ids.add(r.id);
+    // A reused Pyrus card must not expose a previous employee's assessments.
+    if(r.staff_id!==(card.unit.staff_id==null?null:String(card.unit.staff_id))||r.is_reference!==(card.unit.status==='Эталон'))continue;
+    entries.push({id:r.id,current_grade:r.current_grade,target_grade:r.target_grade,created_at:r.created_at,recorded_at:r.recorded_at,is_baseline:r.is_baseline});
+  }
+  entries.sort((a,b)=>Date.parse(a.created_at)-Date.parse(b.created_at)||(BigInt(a.id)<BigInt(b.id)?-1:BigInt(a.id)>BigInt(b.id)?1:0));
+  return {schema_version:1,dataset:'hr_skill_history',source_form_id:405691,task_id:card.unit.task_id,
+    skill_block:kind,matrix_id:matrixId,timezone:'Europe/Moscow',entries};
+}
+
+export function createSkillHistoryReader({webhookUrl,webhookSecret,fetchImpl=fetch,timeoutMs=65000}){
+  return async(taskId,kind,matrixId)=>{
+    const unavailable=()=>Object.assign(new Error('История оценок временно недоступна.'),{status:503});
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+    try{
+      const target=new URL(hrWebhookAddress(webhookUrl));
+      target.pathname=target.pathname.replace(/\/reestr-hr-v1$/,'/reestr-hr-skills-history-v1');
+      if(target.protocol!=='https:'||target.username||target.password||!/^[A-Za-z0-9_-]{32,256}$/.test(webhookSecret||''))throw unavailable();
+      target.searchParams.set('task_id',taskId);target.searchParams.set('kind',kind);target.searchParams.set('matrix_id',matrixId);
+      const response=await fetchImpl(target,{headers:{Accept:'application/json','X-UBAIT-Key':webhookSecret},
+        cache:'no-store',signal:controller.signal,redirect:'error'});
+      if(!response.ok||!response.body||Number(response.headers.get('content-length'))>2*1024*1024)throw unavailable();
+      const reader=response.body.getReader(),chunks=[];let size=0;
+      try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>2*1024*1024)throw unavailable();chunks.push(Buffer.from(value));}}
+      catch(e){await reader.cancel().catch(()=>{});throw e;}
+      return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    }catch{throw unavailable();}finally{clearTimeout(timer);}
+  };
+}
 
 export function hrWebhookAddress(mapAddress){
   if(!mapAddress)throw Object.assign(new Error('В Amvera не задана переменная STORY_MAP_WEBHOOK_URL.'),{status:503});
@@ -143,6 +191,7 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
   }
   const upstream=channel('map'),hrUpstream=channel('hr');
   const competencyDocs=createCompetencyDocs({fetchImpl,now});
+  const skillHistory=createSkillHistoryReader({webhookUrl,webhookSecret,fetchImpl});
   const server=http.createServer(async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('Strict-Transport-Security','max-age=86400');
@@ -185,6 +234,17 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
       }
       if(url.pathname==='/api/story-map'){
         const body=await upstream();res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:body);
+      }
+      if(url.pathname==='/api/hr/skill-history'){
+        res.setHeader('Vary','Cookie');
+        const taskId=url.searchParams.get('task_id'),kind=url.searchParams.get('kind'),matrixId=url.searchParams.get('matrix_id');
+        if(['task_id','kind','matrix_id'].some(k=>url.searchParams.getAll(k).length!==1)||!isSkillHistoryRequest(taskId,kind,matrixId))return json(400,{error:'Неверная карточка или компетенция.'});
+        const scoped=authorizeHr(JSON.parse(await hrUpstream()),user);
+        const card=scoped.cards.find(c=>c.unit.task_id===taskId);
+        if(!card)return json(403,{error:'Нет доступа к истории этой карточки.'});
+        const body=scopeSkillHistory(await skillHistory(taskId,kind,matrixId),card,kind,matrixId);
+        res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+        return res.end(req.method==='HEAD'?undefined:JSON.stringify(body));
       }
       if(url.pathname==='/api/hr'){
         res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');

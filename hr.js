@@ -163,6 +163,67 @@ globalThis.UbaitHR=(()=>{
       }finally{clearTimeout(timer);}
     };
   }
+  function parseSkillHistory(payload,taskId,kind,code){
+    if(payload?.schema_version!==1||payload.dataset!=='hr_skill_history'||payload.source_form_id!==405691||
+      payload.task_id!==taskId||payload.skill_block!==kind||payload.matrix_id!==code||!Array.isArray(payload.entries))throw new Error('Не удалось прочитать историю оценок.');
+    const ids=new Set();
+    const rows=payload.entries.map(r=>{
+      if(!r||typeof r.id!=='string'||! /^[1-9][0-9]{0,18}$/.test(r.id)||ids.has(r.id)||
+        ![r.current_grade,r.target_grade].every(v=>v===null||(typeof v==='string'&&gradeIndex(v)>=0))||
+        typeof r.is_baseline!=='boolean'||typeof r.created_at!=='string'||!/(?:Z|[+-]\d\d:\d\d)$/.test(r.created_at)||!Number.isFinite(Date.parse(r.created_at)))throw new Error('Не удалось прочитать историю оценок.');
+      ids.add(r.id);return {id:r.id,current:r.current_grade,target:r.target_grade,at:r.created_at,baseline:r.is_baseline};
+    });
+    return rows.sort((a,b)=>Date.parse(a.at)-Date.parse(b.at)||(BigInt(a.id)<BigInt(b.id)?-1:BigInt(a.id)>BigInt(b.id)?1:0));
+  }
+  function createHistoryLoader({fetchImpl=(...args)=>fetch(...args)}={}){
+    return async(taskId,kind,code,{signal}={})=>{
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),65000),abort=()=>controller.abort();
+      signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
+      try{
+        const query='task_id='+encodeURIComponent(taskId)+'&kind='+encodeURIComponent(kind)+'&matrix_id='+encodeURIComponent(code);
+        const response=await fetchImpl('/api/hr/skill-history?'+query,{headers:{Accept:'application/json'},credentials:'same-origin',cache:'no-store',signal:controller.signal});
+        if(globalThis.UbaitAuth){try{await UbaitAuth.checked(response);}catch(e){throw Object.assign(e,{status:response.status});}}
+        if(!response.ok)throw Object.assign(new Error(response.status===401?'Сеанс завершён. Войдите снова.':response.status===403?'Нет доступа к истории этой карточки.':'Не удалось загрузить историю оценок.'),{status:response.status});
+        return parseSkillHistory(await response.json(),taskId,kind,code);
+      }finally{clearTimeout(timer);signal?.removeEventListener('abort',abort);}
+    };
+  }
+  const historyDate=(at,time=false)=>new Intl.DateTimeFormat('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',...(time?{hour:'2-digit',minute:'2-digit'}:{}),timeZone:'Europe/Moscow'}).format(new Date(at));
+  function skillHistoryChart(rows){
+    if(!rows.length)return '';
+    const w=720,h=250,left=48,right=18,top=18,bottom=36;
+    const start=Date.parse(rows[0].at),end=Date.parse(rows.at(-1).at);
+    const x=r=>end===start?(w+left-right)/2:left+(Date.parse(r.at)-start)/(end-start)*(w-left-right);
+    const y=g=>h-bottom-gradeIndex(g)/8*(h-top-bottom),p=n=>Number(n.toFixed(2));
+    const grid=scale.map((g,i)=>{const at=p(top+(8-i)/8*(h-top-bottom));return '<line x1="'+left+'" x2="'+(w-right)+'" y1="'+at+'" y2="'+at+'" class="hr-history-grid"/><text x="'+(left-12)+'" y="'+(at+4)+'" text-anchor="end">'+g+'</text>';}).join('');
+    const series=(key,title)=>{
+      let path='',previous=null;
+      for(const r of rows){const valid=gradeIndex(r[key])>=0;
+        if(previous&&gradeIndex(previous[key])>=0){path+=' H '+p(x(r));if(valid)path+=' V '+p(y(r[key]));}
+        else if(valid)path+=' M '+p(x(r))+' '+p(y(r[key]));
+        previous=r;
+      }
+      const dots=rows.filter(r=>gradeIndex(r[key])>=0).map(r=>'<circle cx="'+p(x(r))+'" cy="'+p(y(r[key]))+'" r="'+(key==='target'?5:3.5)+'"><title>'+esc(historyDate(r.at,true)+' · '+title+': '+label(r[key]))+'</title></circle>').join('');
+      return '<g class="hr-history-series '+key+'">'+(path?'<path d="'+path.trim()+'"/>':'')+dots+'</g>';
+    };
+    // Keep labels readable; dates are proportional, not equally spaced snapshots.
+    const ticks=[];for(const i of [0,Math.round((rows.length-1)/2),rows.length-1]){
+      const r=rows[i],position=x(r);if(!ticks.some(t=>Math.abs(t.x-position)<140))ticks.push({x:position,at:r.at});
+    }
+    return '<div class="hr-history-chart-wrap"><svg class="hr-history-chart" viewBox="0 0 '+w+' '+h+'" role="img" aria-label="Изменение текущей и плановой оценки по датам. Подробности в списке ниже.">'+grid+series('target','План')+series('current','Текущая оценка')+ticks.map(t=>'<text x="'+p(t.x)+'" y="'+(h-10)+'" text-anchor="'+(t.x===left?'start':t.x===w-right?'end':'middle')+'">'+esc(historyDate(t.at))+'</text>').join('')+'</svg></div>';
+  }
+  function skillHistory(rows,skill){
+    if(!rows.length)return '<div class="hr-history-empty"><h4>История пока пуста</h4><p>Она появится после первого сохранения оценок.</p></div>';
+    const last=rows.at(-1),unrecorded=skill&&(gradeIndex(skill.current)!==gradeIndex(last.current)||gradeIndex(skill.target)!==gradeIndex(last.target));
+    const value=(v,key)=>gradeIndex(v)<0?(key==='current'?'Не оценено':'Нет плана'):label(v);
+    const changes=rows.map((r,i)=>({r,previous:rows[i-1]})).reverse().map(({r,previous})=>{
+      const fields=['current','target'].filter(key=>!previous||gradeIndex(previous[key])!==gradeIndex(r[key]));
+      const lines=(fields.length?fields:['current','target']).map(key=>'<div class="hr-history-change"><span>'+(key==='current'?'Текущая оценка':'План')+'</span><div>'+(previous&&fields.includes(key)?'<span class="hr-history-before">'+esc(value(previous[key],key))+'</span><span class="hr-history-arrow" aria-label="стало">→</span>':'')+'<strong class="'+(gradeIndex(r[key])<0?'empty':'')+'">'+esc(value(r[key],key))+'</strong></div></div>').join('');
+      return '<li><div class="hr-history-date"><time datetime="'+esc(r.at)+'">'+esc(historyDate(r.at,!r.baseline))+'</time>'+(!previous?'<small>'+(r.baseline?'Исходный срез':'Первый срез')+'</small>':'')+'</div><div class="hr-history-changes">'+lines+'</div></li>';
+    }).join('');
+    const n=rows.length,countLabel=n%10===1&&n%100!==11?'срез':n%10>=2&&n%10<=4&&(n%100<12||n%100>14)?'среза':'срезов';
+    return '<section class="hr-history-overview"><div class="hr-history-heading"><h4>Как менялась оценка</h4><span>'+n+' '+countLabel+'</span></div><div class="hr-history-legend"><span><i></i>Текущая оценка</span><span class="target"><i></i>План</span></div>'+skillHistoryChart(rows)+(rows.length===1?'<p class="hr-history-note">Пока сохранён один срез.</p>':'')+'</section>'+(unrecorded?'<p class="hr-history-note">Последние изменения ещё не попали в историю.</p>':'')+'<ol class="hr-history-list">'+changes+'</ol>';
+  }
   function radarAxes(groups,kind){
     const mean=values=>values.every(v=>v!==null)?values.reduce((sum,v)=>sum+v,0)/values.length:null;
     if(kind==='boss'){
@@ -243,8 +304,8 @@ globalThis.UbaitHR=(()=>{
       {key:'next',title:'Следующий эталонный балл',value:skill.next,grade:skill.nextGrade,note:skill.nextNote}];
     return '<section class="hr-skill-comparison" aria-label="Текущий балл и эталоны грейдов"><div class="hr-skill-metrics">'+marks.map(m=>'<div class="hr-skill-metric '+m.key+'"><span class="hr-metric-label"><i aria-hidden="true"></i>'+m.title+'</span><div><strong>'+label(m.value)+'</strong><span>'+esc(m.grade||'Грейд не указан')+'</span></div>'+(m.note?'<small>'+esc(m.note)+'</small>':'')+'</div>').join('')+'</div><div class="hr-profile-scale" aria-hidden="true">'+scale.map((g,i)=>'<div class="hr-profile-step '+(i===gradeIndex(skill.current)?'chosen':'')+'"><span>'+g+'</span><div class="hr-profile-markers">'+marks.map(m=>'<i class="'+m.key+(i===gradeIndex(m.value)?' marked':'')+'"></i>').join('')+'</div></div>').join('')+'</div></section>';
   }
-  function docsLoading(){
-    return '<div class="hr-docs-loading" role="status"><div class="hr-docs-loading-title">Загружаем описание компетенции<span>Confluence</span></div><div class="hr-docs-progress" role="progressbar" aria-label="Загрузка описания компетенции"><span></span></div><div class="hr-docs-skeleton" aria-hidden="true"><i></i><i></i><i></i></div></div>';
+  function docsLoading(title='Загружаем описание компетенции',source='Confluence'){
+    return '<div class="hr-docs-loading" role="status"><div class="hr-docs-loading-title">'+esc(title)+(source?'<span>'+esc(source)+'</span>':'')+'</div><div class="hr-docs-progress" role="progressbar" aria-label="'+esc(title)+'"><span></span></div><div class="hr-docs-skeleton" aria-hidden="true"><i></i><i></i><i></i></div></div>';
   }
   function gapsDetail(person,data,kind){
     const d=development(person,data,kind);
@@ -287,12 +348,15 @@ globalThis.UbaitHR=(()=>{
     if(root.dataset.hrMounted==='true'){void reloaders.get(root)?.();return;}
     root.dataset.hrMounted='true';
     let data=null,loading=false,error='',denied=false,lastContent='';
-    const loadDocs=createDocsLoader();
+    const loadDocs=createDocsLoader(),loadHistory=createHistoryLoader();
+    let openedSkill=null,historyController=null;
+    const cancelHistory=()=>{historyController?.abort();historyController=null;openedSkill=null;};
     const state={tab:'competencies',person:'',query:'',department:'',status:'',kind:'employee',reference:'',referenceManual:false,year:yearNow(),horizon:'',goalQuery:'',iprQuery:''};
     const person=()=>data?.people.find(p=>p.unit.task_id===state.person);
     const filtered=()=>data.people.filter(p=>(!state.department||p.unit.team===state.department)&&(!state.status||p.unit.status===state.status)&&(!state.query||[title(p),p.unit.position,p.unit.team,p.unit.task_id].join(' ').toLocaleLowerCase('ru').includes(state.query.toLocaleLowerCase('ru'))));
     const spinner=()=>'<div class="hr-empty hr-loading" role="status"><span class="hr-spinner" aria-hidden="true"></span><h3>Загружаем штатные данные</h3><p>Сотрудники, компетенции, KPI и ИПР из БД</p></div>';
     function render(focusId,selection){
+      cancelHistory();
       const accessLabel=data?.access?data.access.level+' · '+({self:'Мой профиль',department:'Мой отдел',all:'Все доступные сотрудники'}[data.access.scope]||'HR'):'';
       const nav='<nav class="hr-subnav" role="tablist" aria-label="Разделы HR">'+Object.entries(tabs).map(([k,t])=>'<button id="hr-'+k+'-tab" role="tab" data-hr-tab="'+k+'" aria-selected="'+(state.tab===k)+'" tabindex="'+(state.tab===k?'0':'-1')+'" aria-controls="hr-tab-content">'+t+'</button>').join('')+'<span class="hr-live" title="'+esc(accessLabel?accessLabel+' · Срез '+timestamp(data.generated_at):'Источник: штатный реестр 405691')+'">'+esc(accessLabel||'Штатка · БД')+'</span><button class="hr-refresh" data-hr-refresh="true" '+(loading?'disabled':'')+' aria-label="Обновить HR" title="Обновить данные и права доступа" >↻</button></nav>';
       if(!data){
@@ -312,6 +376,7 @@ globalThis.UbaitHR=(()=>{
         '<section id="hr-tab-content" class="hr-content" role="tabpanel" aria-labelledby="hr-'+state.tab+'-tab">'+
         (!p?'<div class="hr-empty"><h3>Сотрудник не выбран</h3><p>Измени поиск или фильтры отдела и статуса. В списке только доступные тебе карточки.</p></div>':missing+same+(state.tab==='competencies'?competencies(p,data,state):state.tab==='kpi'?kpi(p,state):state.tab==='ipr'?ipr(p,state):employee(p,data,state.kind)))+
         '</section></div></div><dialog id="hr-skill-dialog" class="hr-dialog" aria-labelledby="hr-skill-title"><div class="dialog-top"><span class="hr-source" id="hr-dialog-label">Профиль навыка</span><button class="action" data-hr-close="true">Закрыть</button></div><div class="detail-body" id="hr-skill-body"></div></dialog>';
+      root.querySelector('#hr-skill-dialog')?.addEventListener?.('close',cancelHistory);
       if(focusId){const el=root.querySelector('#'+focusId);el?.focus({preventScroll:true});if(selection&&el?.setSelectionRange)el.setSelectionRange(...selection);}
     }
     async function load({silent=false}={}){
@@ -335,13 +400,38 @@ globalThis.UbaitHR=(()=>{
     }
     function skillDialog(code){
       const p=person(),skill=skillProfile(p,data,state.kind,code);if(!skill)return;
+      cancelHistory();openedSkill={taskId:p.unit.task_id,kind:state.kind,code,skill,historyLoaded:false};
       root.querySelector('#hr-skill-dialog').dataset.mode='skill';
       root.querySelector('#hr-dialog-label').textContent='Профиль навыка';
-      root.querySelector('#hr-skill-body').innerHTML='<span class="hr-kicker">'+(state.kind==='boss'?'Руководитель':'Сотрудник')+' · '+esc(skill.grade||'Грейд не указан')+'</span><h3 id="hr-skill-title">'+esc(skill.name)+'</h3>'+skillScale(skill)+'<div id="hr-competency-docs" class="hr-docs-slot" data-code="'+esc(code)+'"></div><div class="hr-divider"></div><button class="action" data-hr-open-ipr="'+esc(skill.name)+'">Найти в годовом ИПР →</button>';
-      root.querySelector('#hr-skill-body').innerHTML+=skillEvidence(p,skill,state.year);
+      root.querySelector('#hr-skill-body').innerHTML='<span class="hr-kicker">'+(state.kind==='boss'?'Руководитель':'Сотрудник')+' · '+esc(skill.grade||'Грейд не указан')+'</span><h3 id="hr-skill-title">'+esc(skill.name)+'</h3>'+skillScale(skill)+
+        '<div class="hr-skill-tabs" role="tablist" aria-label="Информация о компетенции">'+[['description','Описание'],['history','История оценок']].map(([key,title])=>'<button id="hr-skill-'+key+'-tab" role="tab" data-hr-skill-tab="'+key+'" aria-selected="'+(key==='description')+'" tabindex="'+(key==='description'?'0':'-1')+'" aria-controls="hr-skill-'+key+'-panel">'+title+'</button>').join('')+'</div>'+
+        '<section id="hr-skill-description-panel" role="tabpanel" aria-labelledby="hr-skill-description-tab"><div id="hr-competency-docs" class="hr-docs-slot" data-code="'+esc(code)+'"></div><div class="hr-divider"></div><button class="action" data-hr-open-ipr="'+esc(skill.name)+'">Найти в годовом ИПР →</button>'+skillEvidence(p,skill,state.year)+'</section>'+
+        '<section id="hr-skill-history-panel" role="tabpanel" aria-labelledby="hr-skill-history-tab" hidden><div id="hr-skill-history" class="hr-history" aria-live="polite"></div></section>';
       root.querySelector('#hr-skill-body').scrollTop=0;
       root.querySelector('#hr-skill-dialog').showModal();
       void showDocs(code);
+    }
+    function selectSkillTab(key,focus=false){
+      if(!openedSkill||!['description','history'].includes(key))return;
+      for(const name of ['description','history']){
+        const tab=root.querySelector('#hr-skill-'+name+'-tab');tab.setAttribute('aria-selected',String(name===key));tab.setAttribute('tabindex',name===key?'0':'-1');
+        root.querySelector('#hr-skill-'+name+'-panel').hidden=name!==key;
+      }
+      if(focus)root.querySelector('#hr-skill-'+key+'-tab').focus();
+      if(key==='history'&&!openedSkill.historyLoaded&&!historyController)void showHistory();
+    }
+    async function showHistory(){
+      const context=openedSkill,slot=root.querySelector('#hr-skill-history'),dialog=root.querySelector('#hr-skill-dialog');
+      if(!context||!slot||!dialog.open)return;
+      historyController?.abort();const controller=new AbortController();historyController=controller;
+      const current=()=>openedSkill===context&&historyController===controller&&slot.isConnected&&dialog.open&&root.querySelector('#hr-skill-history')===slot;
+      slot.innerHTML=docsLoading('Загружаем историю оценок','');
+      try{const rows=await loadHistory(context.taskId,context.kind,context.code,{signal:controller.signal});
+        if(current()){slot.innerHTML=skillHistory(rows,context.skill);context.historyLoaded=true;}
+      }catch(e){if(current()){
+        if(e.status===401||e.status===403){data=null;lastContent='';state.person='';state.reference='';denied=true;error=e.message;render();}
+        else slot.innerHTML='<div class="hr-docs-error" role="status"><span>Не удалось загрузить историю оценок.</span><button class="action" data-hr-history-retry="true">Повторить</button></div>';
+      }}finally{if(historyController===controller)historyController=null;}
     }
     async function showDocs(code){
       const slot=root.querySelector('#hr-competency-docs'),dialog=root.querySelector('#hr-skill-dialog');
@@ -355,9 +445,11 @@ globalThis.UbaitHR=(()=>{
       const button=e.target.closest('button'),d=button?.dataset;if(!d)return;
       if(d.hrRefresh){void load();return;}
       if(!data)return;
-      if(d.hrClose){root.querySelector('#hr-skill-dialog').close();return;}
+      if(d.hrClose){cancelHistory();root.querySelector('#hr-skill-dialog').close();return;}
+      if(d.hrSkillTab){selectSkillTab(d.hrSkillTab);return;}
+      if(d.hrHistoryRetry){void showHistory();return;}
       if(d.hrDocsRetry){void showDocs(d.hrDocsRetry);return;}
-      if(d.hrGaps){const dialog=root.querySelector('#hr-skill-dialog');dialog.dataset.mode='gaps';root.querySelector('#hr-dialog-label').textContent='Гепы';root.querySelector('#hr-skill-body').innerHTML=gapsDetail(person(),data,state.kind);dialog.showModal();return;}
+      if(d.hrGaps){cancelHistory();const dialog=root.querySelector('#hr-skill-dialog');dialog.dataset.mode='gaps';root.querySelector('#hr-dialog-label').textContent='Гепы';root.querySelector('#hr-skill-body').innerHTML=gapsDetail(person(),data,state.kind);dialog.showModal();return;}
       if(d.hrSkill){skillDialog(d.hrSkill,d.hrSkillReference);return;}
       if(d.hrOpenIpr){state.tab='ipr';state.iprQuery=d.hrOpenIpr;render('hr-ipr-tab');return;}
       if(d.hrTab&&Object.hasOwn(tabs,d.hrTab)){state.tab=d.hrTab;render('hr-'+d.hrTab+'-tab');return;}
@@ -368,7 +460,7 @@ globalThis.UbaitHR=(()=>{
       else return;render();
     });
     root.addEventListener('input',e=>{if(!data)return;const keys={'hr-person-search':'query','hr-goal-search':'goalQuery','hr-ipr-search':'iprQuery'},key=keys[e.target.id];if(!key)return;state[key]=e.target.value;render(e.target.id,[e.target.selectionStart,e.target.selectionEnd]);});
-    root.addEventListener('keydown',e=>{if(!data)return;const tab=e.target.closest('[data-hr-tab]');if(!tab)return;const keys=Object.keys(tabs),index=keys.indexOf(state.tab);let next;if(e.key==='ArrowRight')next=keys[(index+1)%keys.length];if(e.key==='ArrowLeft')next=keys[(index+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();state.tab=next;render('hr-'+next+'-tab');}});
+    root.addEventListener('keydown',e=>{if(!data)return;const skillTab=e.target.closest('[data-hr-skill-tab]');if(skillTab){let next;if(e.key==='Home')next='description';if(e.key==='End')next='history';if(['ArrowLeft','ArrowRight'].includes(e.key))next=skillTab.dataset.hrSkillTab==='description'?'history':'description';if(next){e.preventDefault();selectSkillTab(next,true);}return;}const tab=e.target.closest('[data-hr-tab]');if(!tab)return;const keys=Object.keys(tabs),index=keys.indexOf(state.tab);let next;if(e.key==='ArrowRight')next=keys[(index+1)%keys.length];if(e.key==='ArrowLeft')next=keys[(index+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();state.tab=next;render('hr-'+next+'-tab');}});
     reloaders.set(root,load);
     // Recheck permissions when opening HR, returning to the page and every minute
     // while visible. Failed checks clear the previously displayed personnel data.
@@ -380,5 +472,5 @@ globalThis.UbaitHR=(()=>{
     }
     void load();
   }
-  return {mount,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,calculatedGrade,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading};
+  return {mount,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,calculatedGrade,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading,parseSkillHistory,createHistoryLoader,skillHistoryChart,skillHistory};
 })();
