@@ -6,7 +6,7 @@
 import http from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {createAuth} from './auth.mjs';
 import {authorizeHr} from './hr-access.mjs';
 // One competency per request. No retained results, cooldown or shared pending calls.
@@ -98,7 +98,35 @@ export function createCompetencyDocs({fetchImpl=fetch,now=Date.now,timeoutMs=600
   };
 }
 
-export const BUILD_VERSION='2026.11.09-v2.9.1';
+export const BUILD_VERSION='2026.11.10-v2.9.2';
+
+// Shared in-flight sync. Browsers poll this small status instead of holding an HTTP request open.
+export function createHrSync({webhookUrl,webhookSecret,fetchImpl=fetch,now=Date.now,invalidate=()=>{},timeoutMs=900000}){
+  let job=null;
+  const snapshot=()=>job?{...job}:{status:'idle'};
+  async function run(current){
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+    try{
+      const target=new URL(hrWebhookAddress(webhookUrl));target.pathname=target.pathname.replace(/\/reestr-hr-v1$/,'/reestr-hr-sync-v1');
+      if(target.protocol!=='https:'||target.username||target.password||!/^[A-Za-z0-9_-]{32,256}$/.test(webhookSecret||''))throw new Error();
+      const response=await fetchImpl(target,{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','X-UBAIT-Key':webhookSecret},body:'{}',cache:'no-store',signal:controller.signal,redirect:'error'});
+      if(!response.ok||!response.body||Number(response.headers.get('content-length'))>8192)throw new Error();
+      const reader=response.body.getReader(),chunks=[];let size=0;
+      try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>8192)throw new Error();chunks.push(Buffer.from(value));}}catch(e){await reader.cancel().catch(()=>{});throw e;}
+      const result=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      if(result?.schema_version!==1||result.dataset!=='hr_sync'||result.source_form_id!==405691||result.status!=='completed'||typeof result.warnings!=='boolean')throw new Error();
+      invalidate();current.status='completed';current.warnings=result.warnings;
+    }catch{
+      // A network timeout does not prove that n8n rolled back: do not claim otherwise.
+      invalidate();current.status='unconfirmed';
+    }finally{clearTimeout(timer);controller.abort();current.finished_at=new Date(now()).toISOString();}
+  }
+  return {status:snapshot,start(){
+    if(job?.status==='running')return snapshot();
+    job={id:randomUUID(),status:'running',started_at:new Date(now()).toISOString()};
+    void run(job);return snapshot();
+  }};
+}
 
 export function isSkillHistoryRequest(taskId,kind,matrixId){
   return typeof taskId==='string'&&/^[1-9][0-9]{0,18}$/.test(taskId)&&BigInt(taskId)<=9223372036854775807n&&
@@ -161,11 +189,12 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
   const auth=createAuth({origin,...authOptions});
   const htmlPath=new URL('./index.html',import.meta.url);
   function channel(kind){
-   let cache=null,pending=null;
-   return async function upstream() {
+   let cache=null,pending=null,generation=0;
+   async function upstream() {
     if(cache && now()-cache.at<cacheMs) return cache.body;
     if(pending) return pending;
-    pending=(async()=>{
+    const version=generation;
+    const running=(async()=>{
       if(!webhookUrl) throw Object.assign(new Error('В Amvera не задана переменная STORY_MAP_WEBHOOK_URL.'),{status:503});
       let target;
       try { target=new URL(kind==='hr'?hrWebhookAddress(webhookUrl):webhookUrl); } catch(error) { if(error.status)throw error;throw Object.assign(new Error('STORY_MAP_WEBHOOK_URL содержит неверный адрес.'),{status:503}); }
@@ -183,15 +212,18 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
         if(kind==='hr'){
           if(data?.schema_version!==1||data.dataset!=='hr'||data.api_revision!==1||data.source_form_id!==405691||!Array.isArray(data.cards))throw new Error('Неверный ответ n8n HR: нужен флоу «HR — реальные данные 405691».');
         }else if(data?.schema_version!==1 || !Array.isArray(data.stories) || !Array.isArray(data.epics)) throw new Error('Неверный ответ n8n: ожидаются schema_version: 1, stories и epics.');
-        const body=JSON.stringify(data);cache={body,at:now()};return body;
+        const body=JSON.stringify(data);if(version===generation)cache={body,at:now()};return body;
       } finally { clearTimeout(timer); }
-    })().catch(error=>{cache=null;throw error;}).finally(()=>{pending=null;});
+    })().catch(error=>{if(version===generation)cache=null;throw error;}).finally(()=>{if(pending===running)pending=null;});
+    pending=running;
     return pending;
-   };
+   }
+   upstream.invalidate=()=>{generation++;cache=null;pending=null;};return upstream;
   }
   const upstream=channel('map'),hrUpstream=channel('hr');
   const competencyDocs=createCompetencyDocs({fetchImpl,now});
   const skillHistory=createSkillHistoryReader({webhookUrl,webhookSecret,fetchImpl});
+  const hrSync=createHrSync({webhookUrl,webhookSecret,fetchImpl,now,invalidate:()=>hrUpstream.invalidate()});
   const server=http.createServer(async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('Strict-Transport-Security','max-age=86400');
@@ -209,7 +241,8 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
       if(url.pathname==='/auth/logout'&&req.method==='POST')return json(200,auth.logout(req,res));
       if(url.pathname==='/auth/change-password'&&req.method==='POST')return json(200,await auth.changePassword(req,res));
       if(auth.isAdminRoute(url.pathname))return await auth.proxyAdmin(req,res,url);
-      if(!['GET','HEAD'].includes(req.method)){res.setHeader('Allow','GET, HEAD');return json(405,{error:'Только GET.'});}
+      const syncPost=url.pathname==='/api/hr/sync'&&req.method==='POST';
+      if(!['GET','HEAD'].includes(req.method)&&!syncPost){res.setHeader('Allow','GET, HEAD');return json(405,{error:'Только GET.'});}
       if(['/login','/login.js','/login.css'].includes(url.pathname)){
         const name=url.pathname==='/login'?'login.html':url.pathname.slice(1);
         res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
@@ -222,6 +255,15 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
         return json(e.status||503,{error:e.status===401?'Войдите в систему.':'Сервис входа временно недоступен.'});
       }
       if(url.pathname==='/auth/me')return json(200,user);
+      if(url.pathname==='/api/hr/sync'){
+        res.setHeader('Vary','Cookie');
+        if(syncPost&&(req.headers.origin!==new URL(origin).origin||req.headers['sec-fetch-site']==='cross-site'))return json(403,{error:'Запуск разрешён только со страницы сайта.'});
+        // Starting the shared loader grants no extra read access to any HR record.
+        authorizeHr(JSON.parse(await hrUpstream()),user);
+        const status=syncPost?hrSync.start():hrSync.status();
+        if(req.method==='HEAD'){res.writeHead(200);return res.end();}
+        return json(syncPost?202:200,status);
+      }
       if(url.pathname==='/api/competency-docs'){
         res.setHeader('Vary','Cookie');
         const matrixId=url.searchParams.get('matrix_id');

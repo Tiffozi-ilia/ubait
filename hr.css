@@ -43,6 +43,11 @@
 .hr-evidence{margin-top:20px;border-top:1px solid var(--line);padding-top:15px}.hr-evidence h4{font-size:13px;margin:0 0 6px}.hr-evidence>p{margin-top:10px}.hr-evidence details{margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:5px}.hr-evidence summary{font-size:11px;cursor:pointer}
 .hr-live{margin-left:auto;align-self:center;color:var(--hr-teal);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 #hr-view .hr-refresh{font-size:18px;padding:0 10px;flex-shrink:0}
+#hr-view .hr-push-sync{align-self:center;min-height:30px;padding:4px 10px;border:1px solid var(--line);border-radius:7px;color:var(--hr-violet);white-space:nowrap}
+#hr-view .hr-push-sync:disabled{opacity:.6;cursor:default}
+.hr-sync-state{flex-shrink:0;padding:6px 18px;color:var(--sub);background:var(--paper);border-bottom:1px solid var(--line);font-size:11px;line-height:1.5}
+.hr-sync-state[hidden]{display:none}
+@media(max-width:640px){#hr-view .hr-subnav{height:auto;min-height:42px;flex-wrap:wrap;padding-bottom:4px}#hr-view .hr-live{display:none}#hr-view .hr-push-sync{margin-left:auto}.hr-subnav>[role="tab"]{min-height:38px}}
 .hr-loading{flex:1;align-content:center;gap:15px}
 .hr-spinner{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--hr-violet);border-radius:50%;animation:hr-spin 1s linear infinite}
 .hr-failure{margin:0!important;border-left-color:var(--danger)!important;color:var(--danger)!important}
