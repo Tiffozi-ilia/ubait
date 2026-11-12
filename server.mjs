@@ -98,7 +98,7 @@ export function createCompetencyDocs({fetchImpl=fetch,now=Date.now,timeoutMs=600
   };
 }
 
-export const BUILD_VERSION='2026.11.12-v2.9.4';
+export const BUILD_VERSION='2026.11.12-v2.9.5';
 
 // Shared in-flight sync. Browsers poll this small status instead of holding an HTTP request open.
 export function createHrSync({webhookUrl,webhookSecret,fetchImpl=fetch,now=Date.now,invalidate=()=>{},timeoutMs=900000}){

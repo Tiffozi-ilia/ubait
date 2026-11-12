@@ -1,4 +1,4 @@
-/* Inline eye icons: Lucide.
+/* Inline UI icons: Lucide.
 ISC License
 
 Copyright (c) 2026 Lucide Icons and Contributors
@@ -75,6 +75,7 @@ globalThis.UbaitHR=(()=>{
   ]};
   for(const [kind,groups]of Object.entries(definitions))for(const group of groups)group.items=group.items.map(([suffix,name])=>({code:(kind==='employee'?'03.01.01.':'03.01.02.')+suffix,name}));
   const tabs={competencies:'Компетенции',kpi:'KPI',ipr:'ИПР',employee:'Сотрудник'};
+  const skillGroupIcons={"employee":["<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M12 18V5\"/><path d=\"M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4\"/><path d=\"M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5\"/><path d=\"M17.997 5.125a4 4 0 0 1 2.526 5.77\"/><path d=\"M18 18a4 4 0 0 0 2-7.464\"/><path d=\"M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517\"/><path d=\"M6 18a4 4 0 0 1-2-7.464\"/><path d=\"M6.003 5.125a4 4 0 0 0-2.526 5.77\"/></svg>","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M12 7v14\"/><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\"/></svg>","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z\"/></svg>","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M11 14h2a2 2 0 0 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16\"/><path d=\"m14.45 13.39 5.05-4.694C20.196 8 21 6.85 21 5.75a2.75 2.75 0 0 0-4.797-1.837.276.276 0 0 1-.406 0A2.75 2.75 0 0 0 11 5.75c0 1.2.802 2.248 1.5 2.946L16 11.95\"/><path d=\"m2 15 6 6\"/><path d=\"m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a1 1 0 0 0-2.75-2.91\"/></svg>","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M18 21a8 8 0 0 0-16 0\"/><circle cx=\"10\" cy=\"8\" r=\"5\"/><path d=\"M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3\"/></svg>"],"boss":["<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><rect x=\"16\" y=\"16\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"2\" y=\"16\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"9\" y=\"2\" width=\"6\" height=\"6\" rx=\"1\"/><path d=\"M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3\"/><path d=\"M12 12V8\"/></svg>","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z\"/></svg>"]};
   const allSkills=kind=>definitions[kind].flatMap(g=>g.items);
   const initials=name=>esc(String(name??'').trim().split(/\s+/).slice(0,2).map(x=>x[0]||'').join(''));
   const title=p=>p.unit.staff||[p.unit.status,p.unit.position].filter(Boolean).join(' · ')||'Карточка #'+p.unit.task_id;
@@ -295,7 +296,11 @@ globalThis.UbaitHR=(()=>{
   function competenciesBase(person,data,state){
     const ref=data.references.find(r=>r.unit.task_id===state.reference),groups=comparison(person,ref,state.kind);
     const refs=[...data.references].sort((a,b)=>{const order=r=>{const i=careerGrades.findIndex(g=>norm(g)===norm(r.unit.grade));return i<0?99:i;};return order(a)-order(b);});
-    return '<div class="hr-panel-top"><div class="hr-switch" role="group" aria-label="Набор компетенций">'+[['employee','Сотрудник'],['boss','Руководитель']].map(([k,t])=>'<button data-hr-kind="'+k+'" aria-pressed="'+(state.kind===k)+'">'+t+'</button>').join('')+'</div></div><div class="hr-competency-layout"><div><div class="hr-skill-grid">'+groups.map(g=>{const s=countSkills([g]);return '<section class="hr-card hr-skill-group"><header><span class="hr-skill-icon" aria-hidden="true">'+g.icon+'</span><div><h3>'+esc(g.name)+'</h3>'+(s.assessed<s.total?'<small>Оценено '+s.assessed+' из '+s.total+'</small>':'')+'</div></header>'+g.items.map(s=>'<button class="hr-skill" data-hr-skill="'+s.code+'" aria-label="'+esc(s.name)+'. Сейчас '+label(s.current)+', план '+label(s.target)+', эталон '+label(s.reference)+'"><span class="hr-skill-heading"><span>'+esc(s.name)+'</span><b>'+label(s.current)+'</b></span>'+levelBar(s)+'</button>').join('')+'</section>';}).join('')+'</div><div class="hr-skill-legend"><span><i class="hr-key"></i>AS IS</span><span><i class="hr-key target"></i>План</span><span><i class="hr-key reference"></i>Эталон</span></div></div><aside class="hr-card hr-benchmark hr-radar-panel"><span class="hr-kicker">Сравнить с эталоном</span><div class="hr-grade-choices" role="group" aria-label="Эталон грейда">'+(refs.length?refs.map(r=>'<button data-hr-reference="'+esc(r.unit.task_id)+'" aria-pressed="'+(state.reference===r.unit.task_id)+'">'+esc(referenceLabel(r,data))+'</button>').join(''):'<p>Эталоны не найдены</p>')+'</div>'+radar(groups,state.kind)+'</aside></div>';
+    const selected=state.skillGroups?.[state.kind],active=Number.isInteger(selected)&&selected>=0&&selected<groups.length?selected:0,group=groups[active];
+    const groupTabs='<div class="hr-group-tabs" role="tablist" aria-label="Группы компетенций">'+groups.map((g,i)=>'<button type="button" id="hr-group-'+state.kind+'-'+i+'" role="tab" data-hr-group="'+i+'" aria-controls="hr-competency-group" aria-selected="'+(i===active)+'" tabindex="'+(i===active?'0':'-1')+'">'+skillGroupIcons[state.kind][i]+'<span>'+esc(g.name)+'</span></button>').join('')+'</div>';
+    const groupPanel='<section id="hr-competency-group" class="hr-card hr-skill-group" role="tabpanel" aria-labelledby="hr-group-'+state.kind+'-'+active+'"><header><h3>'+esc(group.name)+'</h3></header>'+group.items.map(s=>'<button type="button" class="hr-skill" data-hr-skill="'+s.code+'" aria-haspopup="dialog" aria-label="'+esc(s.name)+'. Сейчас '+label(s.current)+', план '+label(s.target)+', эталон '+label(s.reference)+'"><span class="hr-skill-heading"><span>'+esc(s.name)+'</span><b>'+label(s.current)+'</b></span>'+levelBar(s)+'</button>').join('')+'</section>';
+    const benchmark='<aside class="hr-card hr-benchmark hr-radar-panel"><div class="hr-benchmark-controls"><span class="hr-kicker">Сравнить с эталоном</span><div class="hr-grade-choices" role="group" aria-label="Эталон грейда">'+(refs.length?refs.map(r=>'<button data-hr-reference="'+esc(r.unit.task_id)+'" aria-pressed="'+(state.reference===r.unit.task_id)+'">'+esc(referenceLabel(r,data))+'</button>').join(''):'<p>Эталоны не найдены</p>')+'</div></div>'+radar(groups,state.kind)+'</aside>';
+    return '<div class="hr-competency-page"><div class="hr-panel-top"><div class="hr-switch" role="group" aria-label="Набор компетенций">'+[['employee','Сотрудник'],['boss','Руководитель']].map(([k,t])=>'<button data-hr-kind="'+k+'" aria-pressed="'+(state.kind===k)+'">'+t+'</button>').join('')+'</div></div>'+developmentSummary(person,data,state.kind)+groupTabs+'<div class="hr-competency-layout">'+benchmark+'<div class="hr-group-content">'+groupPanel+'<div class="hr-skill-legend"><span><i class="hr-key"></i>AS IS</span><span><i class="hr-key target"></i>План</span><span><i class="hr-key reference"></i>Эталон</span></div></div></div></div>';
   }
   function scoreProfile(person,kind){
     const record=person?.['skills_'+kind]??{},values=allSkills(kind).map(s=>gradePoints(record[s.code+'_current']));
@@ -360,8 +365,8 @@ globalThis.UbaitHR=(()=>{
     return '<h3 id="hr-skill-title">Гепы к текущему грейду</h3><p class="hr-gap-context">'+esc(d.calculated.label)+' · '+(d.comparable===d.rows.length?'Гепов: '+d.gaps.length:d.gaps.length?'Гепов: ≥ '+d.gaps.length:'Сравнение неполное')+'</p>'+(issue?'<p class="hr-note">'+esc(issue)+'</p>':'')+(d.gaps.length?'<div class="hr-gap-table-wrap"><table class="hr-gap-table"><thead><tr><th>Компетенция</th><th>AS IS</th><th>Эталон</th><th>Разрыв</th></tr></thead><tbody>'+d.gaps.map(s=>'<tr><th scope="row">'+esc(s.name)+'</th><td><b>'+label(s.current)+'</b><small>'+fmt(s.actualPoints)+' б.</small></td><td><b>'+label(s.reference)+'</b><small>'+fmt(s.referencePoints)+' б.</small></td><td class="hr-gap-points">−'+fmt(s.gap)+'</td></tr>').join('')+'</tbody></table></div>':!issue?'<p class="hr-gap-empty">Открытых гепов нет</p>':'');
   }
   function competencies(person,data,state){
-    // Keep existing skill cards; summarize AS IS separately from the comparison selector.
-    return competenciesBase(person,data,state).replace('<div class="hr-competency-layout">',developmentSummary(person,data,state.kind)+'<div class="hr-competency-layout">');
+    // Group selection affects only the visible skills, never totals or the radar.
+    return competenciesBase(person,data,state);
   }
   // Only exact known competency names/aliases link IPR rows; never fuzzy matches.
   function iprSkillCode(row){
@@ -437,7 +442,7 @@ globalThis.UbaitHR=(()=>{
       if(button){button.disabled=!data||loading||['requesting','running'].includes(s.status);button.textContent=s.status==='disconnected'?'Проверить синхронизацию':['requesting','running'].includes(s.status)?'Синхронизация…':'Синхронизировать';button.setAttribute?.('aria-busy',String(['requesting','running'].includes(s.status)));}
       if(message){message.textContent=syncText(s);message.hidden=!message.textContent;}
     }
-    const state={tab:Object.hasOwn(tabs,root.dataset.hrSelectedTab)?root.dataset.hrSelectedTab:'competencies',person:'',query:'',department:'',status:'',kind:'employee',reference:'',referenceManual:false,year:yearNow(),horizon:'',goalQuery:'',iprQuery:''};
+    const state={tab:Object.hasOwn(tabs,root.dataset.hrSelectedTab)?root.dataset.hrSelectedTab:'competencies',person:'',query:'',department:'',status:'',kind:'employee',skillGroups:{employee:0,boss:0},reference:'',referenceManual:false,year:yearNow(),horizon:'',goalQuery:'',iprQuery:''};
     const navigation=globalThis.document?.getElementById('hr-navigation');
     tabSetters.set(root,key=>{if(state.tab!==key){state.tab=key;render('hr-'+key+'-tab');}});
     const person=()=>data?.people.find(p=>p.unit.task_id===state.person);
@@ -473,6 +478,12 @@ globalThis.UbaitHR=(()=>{
     function load(options={}){
       if(activeLoad)return activeLoad;
       activeLoad=loadData(options).finally(()=>{activeLoad=null;});return activeLoad;
+    }
+    function selectSkillGroup(index){
+      if(!Number.isInteger(index)||index<0||index>=definitions[state.kind].length)return;
+      const content=root.querySelector('#hr-tab-content'),scrollTop=content?.scrollTop??0;
+      state.skillGroups[state.kind]=index;render('hr-group-'+state.kind+'-'+index);
+      const updated=root.querySelector('#hr-tab-content');if(updated)updated.scrollTop=scrollTop;
     }
     async function loadData({silent=false}={}){
       if(loading)return;loading=true;error='';denied=false;
@@ -553,6 +564,7 @@ globalThis.UbaitHR=(()=>{
       if(d.hrDocsRetry){void showDocs(d.hrDocsRetry);return;}
       if(d.hrGaps){cancelHistory();const dialog=root.querySelector('#hr-skill-dialog');dialog.dataset.mode='gaps';root.querySelector('#hr-dialog-label').textContent='Гепы';root.querySelector('#hr-skill-body').innerHTML=gapsDetail(person(),data,state.kind);dialog.showModal();return;}
       if(d.hrSkill){skillDialog(d.hrSkill,d.hrSkillReference);return;}
+      if(d.hrGroup!==undefined){selectSkillGroup(Number(d.hrGroup));return;}
       if(d.hrOpenIpr){state.tab='ipr';state.iprQuery=d.hrOpenIpr;render('hr-ipr-tab');return;}
       if(d.hrTab&&Object.hasOwn(tabs,d.hrTab)){state.tab=d.hrTab;render('hr-'+d.hrTab+'-tab');return;}
       if(d.hrPerson&&data.people.some(p=>p.unit.task_id===d.hrPerson)){state.person=d.hrPerson;state.referenceManual=false;state.goalQuery='';state.iprQuery='';state.horizon='';render();return;}
@@ -562,7 +574,7 @@ globalThis.UbaitHR=(()=>{
       else return;render();
     });
     root.addEventListener('input',e=>{if(!data)return;const keys={'hr-person-search':'query','hr-goal-search':'goalQuery','hr-ipr-search':'iprQuery'},key=keys[e.target.id];if(!key)return;state[key]=e.target.value;render(e.target.id,[e.target.selectionStart,e.target.selectionEnd]);});
-    root.addEventListener('keydown',e=>{if(!data)return;const skillTab=e.target.closest('[data-hr-skill-tab]');if(skillTab){let next;if(e.key==='Home')next='description';if(e.key==='End')next='history';if(['ArrowLeft','ArrowRight'].includes(e.key))next=skillTab.dataset.hrSkillTab==='description'?'history':'description';if(next){e.preventDefault();selectSkillTab(next,true);}return;}const tab=e.target.closest('[data-hr-tab]');if(!tab)return;const keys=Object.keys(tabs),index=keys.indexOf(state.tab);let next;if(e.key==='ArrowRight')next=keys[(index+1)%keys.length];if(e.key==='ArrowLeft')next=keys[(index+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();state.tab=next;render('hr-'+next+'-tab');}});
+    root.addEventListener('keydown',e=>{if(!data)return;const groupTab=e.target.closest('[data-hr-group]');if(groupTab){const count=definitions[state.kind].length,index=Number(groupTab.dataset.hrGroup);let next;if(e.key==='ArrowRight')next=(index+1)%count;if(e.key==='ArrowLeft')next=(index+count-1)%count;if(e.key==='Home')next=0;if(e.key==='End')next=count-1;if(next!==undefined){e.preventDefault();selectSkillGroup(next);}return;}const skillTab=e.target.closest('[data-hr-skill-tab]');if(skillTab){let next;if(e.key==='Home')next='description';if(e.key==='End')next='history';if(['ArrowLeft','ArrowRight'].includes(e.key))next=skillTab.dataset.hrSkillTab==='description'?'history':'description';if(next){e.preventDefault();selectSkillTab(next,true);}return;}const tab=e.target.closest('[data-hr-tab]');if(!tab)return;const keys=Object.keys(tabs),index=keys.indexOf(state.tab);let next;if(e.key==='ArrowRight')next=keys[(index+1)%keys.length];if(e.key==='ArrowLeft')next=keys[(index+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();state.tab=next;render('hr-'+next+'-tab');}});
     reloaders.set(root,async()=>{await load();if(data)void sync.check(true);});
     // Recheck permissions when opening HR, returning to the page and every minute
     // while visible. Failed checks clear the previously displayed personnel data.

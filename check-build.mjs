@@ -17,7 +17,7 @@ for(const name of ['errors.js','stat.js','kanban.js','hr.js','auth-client.js']){
   assert(html.includes(`src="/${name}"`),`Missing module ${name}`);
   new Script(await readFile(new URL('./'+name,import.meta.url),'utf8'),{filename:name});
 }
-for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','kanban-tab','hr-tab','v2.9.4 · 12.11','taskMin','taskMax','stoppedEpicTotals','UbaitAFCT','Состав работ · АФКТ','id="app-sidebar"','id="hr-navigation"','id="sidebar-account"']){
+for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','kanban-tab','hr-tab','v2.9.5 · 12.11','taskMin','taskMax','stoppedEpicTotals','UbaitAFCT','Состав работ · АФКТ','id="app-sidebar"','id="hr-navigation"','id="sidebar-account"']){
   assert(html.includes(text),`Current UI is missing: ${text}`);
 }
 assert(!html.includes('<select'),'Old native-select interface must not be packaged.');
