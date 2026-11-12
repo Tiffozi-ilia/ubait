@@ -368,6 +368,13 @@ globalThis.UbaitHR=(()=>{
   }
   const syncText=s=>s.status==='requesting'?'Запускаем загрузку из Pyrus…':s.status==='running'?'Синхронизация HR с Pyrus… Можно продолжать работу.':s.status==='completed'?(s.warnings?'HR обновлён. Есть замечания загрузки — администратор увидит их в n8n.':'HR и история оценок обновлены · '+timestamp(s.finished_at)):s.status==='unconfirmed'?'Не удалось подтвердить завершение. Проверь данные кнопкой ↻; если они не обновились — выполнение флоу в n8n.':s.status==='disconnected'?'Не удалось получить статус. Нажми «Проверить синхронизацию».':'';
   const reloaders=new WeakMap();
+  const tabSetters=new WeakMap();
+  function selectTab(root,key){
+    if(!root||!Object.hasOwn(tabs,key))return false;
+    root.dataset.hrSelectedTab=key;
+    tabSetters.get(root)?.(key);
+    return true;
+  }
   function mount(root){
     if(root.dataset.hrMounted==='true'){void reloaders.get(root)?.();return;}
     root.dataset.hrMounted='true';
@@ -383,14 +390,18 @@ globalThis.UbaitHR=(()=>{
       if(button){button.disabled=!data||loading||['requesting','running'].includes(s.status);button.textContent=s.status==='disconnected'?'Проверить синхронизацию':['requesting','running'].includes(s.status)?'Синхронизация…':'Синхронизировать';button.setAttribute?.('aria-busy',String(['requesting','running'].includes(s.status)));}
       if(message){message.textContent=syncText(s);message.hidden=!message.textContent;}
     }
-    const state={tab:'competencies',person:'',query:'',department:'',status:'',kind:'employee',reference:'',referenceManual:false,year:yearNow(),horizon:'',goalQuery:'',iprQuery:''};
+    const state={tab:Object.hasOwn(tabs,root.dataset.hrSelectedTab)?root.dataset.hrSelectedTab:'competencies',person:'',query:'',department:'',status:'',kind:'employee',reference:'',referenceManual:false,year:yearNow(),horizon:'',goalQuery:'',iprQuery:''};
+    const navigation=globalThis.document?.getElementById('hr-navigation');
+    tabSetters.set(root,key=>{if(state.tab!==key){state.tab=key;render('hr-'+key+'-tab');}});
     const person=()=>data?.people.find(p=>p.unit.task_id===state.person);
     const filtered=()=>data.people.filter(p=>(!state.department||p.unit.team===state.department)&&(!state.status||p.unit.status===state.status)&&(!state.query||[title(p),p.unit.position,p.unit.team,p.unit.task_id].join(' ').toLocaleLowerCase('ru').includes(state.query.toLocaleLowerCase('ru'))));
     const spinner=()=>'<div class="hr-empty hr-loading" role="status"><span class="hr-spinner" aria-hidden="true"></span><h3>Загружаем штатные данные</h3><p>Сотрудники, компетенции, KPI и ИПР из БД</p></div>';
     function render(focusId,selection){
       cancelHistory();
+      root.dataset.hrSelectedTab=state.tab;
+      navigation?.querySelectorAll('[data-hr-tab]').forEach(button=>{const active=button.dataset.hrTab===state.tab;button.setAttribute('aria-selected',String(active));button.setAttribute('tabindex',active?'0':'-1');});
       const accessLabel=data?.access?data.access.level+' · '+({self:'Мой профиль',department:'Мой отдел',all:'Все доступные сотрудники'}[data.access.scope]||'HR'):'';
-      const nav='<nav class="hr-subnav" role="tablist" aria-label="Разделы HR">'+Object.entries(tabs).map(([k,t])=>'<button id="hr-'+k+'-tab" role="tab" data-hr-tab="'+k+'" aria-selected="'+(state.tab===k)+'" tabindex="'+(state.tab===k?'0':'-1')+'" aria-controls="hr-tab-content">'+t+'</button>').join('')+'<span class="hr-live" title="'+esc(accessLabel?accessLabel+' · Срез '+timestamp(data.generated_at):'Источник: штатный реестр 405691')+'">'+esc(accessLabel||'Штатка · БД')+'</span><button id="hr-push-sync" class="hr-push-sync" data-hr-sync="true" title="Загрузить изменения из Pyrus в БД и сохранить историю оценок">Синхронизировать</button><button class="hr-refresh" data-hr-refresh="true" '+(loading?'disabled':'')+' aria-label="Перечитать HR из БД" title="Перечитать данные и права доступа из БД" >↻</button></nav><div id="hr-sync-state" class="hr-sync-state" role="status" aria-live="polite" hidden></div>';
+      const nav=(navigation?'<div class="hr-subnav" role="group" aria-label="Обновление HR">':'<nav class="hr-subnav" role="tablist" aria-label="Разделы HR">'+Object.entries(tabs).map(([k,t])=>'<button id="hr-'+k+'-tab" role="tab" data-hr-tab="'+k+'" aria-selected="'+(state.tab===k)+'" tabindex="'+(state.tab===k?'0':'-1')+'" aria-controls="hr-tab-content">'+t+'</button>').join(''))+'<span class="hr-live" title="'+esc(accessLabel?accessLabel+' · Срез '+timestamp(data.generated_at):'Источник: штатный реестр 405691')+'">'+esc(accessLabel||'Штатка · БД')+'</span><button id="hr-push-sync" class="hr-push-sync" data-hr-sync="true" title="Загрузить изменения из Pyrus в БД и сохранить историю оценок">Синхронизировать</button><button class="hr-refresh" data-hr-refresh="true" '+(loading?'disabled':'')+' aria-label="Перечитать HR из БД" title="Перечитать данные и права доступа из БД" >↻</button>'+(navigation?'</div>':'</nav>')+'<div id="hr-sync-state" class="hr-sync-state" role="status" aria-live="polite" hidden></div>';
       if(!data){
         root.innerHTML=nav+(loading?spinner():'<div class="hr-empty" role="alert"><h3>'+(denied?'Доступ к HR не настроен':'HR не подключён')+'</h3><p>'+esc(error||'Нет ответа от HR API.')+'</p><button class="action" data-hr-refresh="true">Повторить загрузку</button></div>');
         paintSync();return;
@@ -410,7 +421,7 @@ globalThis.UbaitHR=(()=>{
         '</section></div></div><dialog id="hr-skill-dialog" class="hr-dialog" aria-labelledby="hr-skill-title"><div class="dialog-top"><span class="hr-source" id="hr-dialog-label">Профиль навыка</span><button class="action" data-hr-close="true">Закрыть</button></div><div class="detail-body" id="hr-skill-body"></div></dialog>';
       root.querySelector('#hr-skill-dialog')?.addEventListener?.('close',cancelHistory);
       paintSync();
-      if(focusId){const el=root.querySelector('#'+focusId);el?.focus({preventScroll:true});if(selection&&el?.setSelectionRange)el.setSelectionRange(...selection);}
+      if(focusId){const el=root.querySelector('#'+focusId)||navigation?.querySelector('#'+focusId);el?.focus({preventScroll:true});if(selection&&el?.setSelectionRange)el.setSelectionRange(...selection);}
     }
     function load(options={}){
       if(activeLoad)return activeLoad;
@@ -510,5 +521,5 @@ globalThis.UbaitHR=(()=>{
     }
     void load().then(()=>{if(data)void sync.check(true);});
   }
-  return {mount,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,calculatedGrade,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading,parseSkillHistory,createHistoryLoader,skillHistoryChart,skillHistory,createSyncClient};
+  return {mount,selectTab,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,calculatedGrade,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading,parseSkillHistory,createHistoryLoader,skillHistoryChart,skillHistory,createSyncClient};
 })();

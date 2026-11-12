@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light"><meta name="robots" content="noindex,nofollow">
-<meta name="app-version" content="2026.11.10-v2.9.2">
-<meta name="ui-revision" content="R16-hr-push-sync">
+<meta name="app-version" content="2026.11.12-v2.9.3">
+<meta name="ui-revision" content="R17-left-navigation">
 <title>УБАИТ · Команда и продукты</title>
 <link rel="stylesheet" href="/hr.css">
 <style>
@@ -89,16 +89,85 @@ dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);bor
 @media(max-width:650px){#statistics-view{overflow:auto;padding:8px}.stat-dashboard{display:flex;flex-direction:column;flex:none;min-height:100%;gap:10px}.stat-insights{order:-1;overflow:visible;display:grid;grid-template-columns:1fr 1fr;gap:8px}.stat-overview,.stat-trend{padding:10px}.stat-quality{grid-column:1/-1;padding:9px 12px}.stat-primary-number{margin:10px 0}.stat-primary-number strong{font-size:26px}.stat-primary-number>span{font-size:10px}.stat-secondary-metrics{grid-template-columns:1fr 1fr;gap:5px}.stat-secondary-metrics strong{font-size:14px}.stat-secondary-metrics>div:last-child{grid-column:1/-1;display:flex;gap:8px;align-items:center}.stat-trend header{margin-bottom:10px;gap:3px}.stat-trend h3{font-size:11px}.stat-grain-switch button{padding:4px;font-size:9px}.stat-column-track{height:55px}.stat-period small{font-size:7px}.stat-chart{gap:1px}.stat-column-track{margin:0 1px}.stat-chart-footer{font-size:8px}.stat-chart-hint{display:none}.stat-ranking{overflow:visible;flex:none}.stat-ranking-scroll{overflow:visible}.stat-list-footer{font-size:9px}.stat-rank-row{min-height:60px}.stats-controls{padding:0}.app-panel[data-view="statistics"] .search{flex-basis:100%}.app-panel[data-view="statistics"] .toolbar{padding:6px 8px}.app-panel[data-view="statistics"] #reset{font-size:10px;padding:5px}.stat-detail-metrics{gap:16px}.stat-detail-metrics strong{font-size:19px}}
 .error-column header{min-height:100px}
 </style>
+<style id="sidebar-styles">
+body.has-sidebar{flex-direction:row;--sidebar-width:184px}
+body.has-sidebar.sidebar-collapsed{--sidebar-width:56px}
+.has-sidebar>.app-panel{min-width:0}
+.has-sidebar>.loading-cover{left:var(--sidebar-width);top:0}
+.app-sidebar{width:var(--sidebar-width);flex:0 0 var(--sidebar-width);min-height:0;display:flex;flex-direction:column;padding:0 10px;background:var(--paper);border-right:1px solid var(--line);position:relative;z-index:10}
+.sidebar-brand{height:58px;min-height:58px;display:flex;align-items:center;gap:10px;padding:0 8px}
+.sidebar-brand .app-brand{font-size:17px;letter-spacing:.08em}
+.sidebar-toggle{margin-left:auto;display:flex;align-items:center;justify-content:center;width:28px;min-height:30px;background:none;border:0;border-radius:5px;color:var(--sub);padding:5px}
+.sidebar-toggle:hover{background:var(--bg);color:var(--ink)}
+.sidebar-icon{width:17px;height:17px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.app-sidebar .app-tabs{display:flex;flex-direction:column;align-self:stretch;gap:4px;flex:1;min-height:0;overflow:auto;padding:2px 0 12px;scrollbar-width:thin}
+.app-sidebar .app-tab{display:flex;align-items:center;gap:10px;flex-shrink:0;min-height:39px;padding:9px 10px;width:100%;border:0;border-radius:6px;text-align:left;font-size:12px;font-weight:500}
+.app-sidebar .app-tab:hover{background:var(--bg)}
+.app-sidebar .app-tab[aria-current="page"]{background:var(--soft);color:var(--accent);box-shadow:inset 3px 0 var(--accent);font-weight:650}
+.app-sidebar .app-tab.sidebar-parent[aria-current="page"]{background:none;box-shadow:none;color:var(--accent)}
+.sidebar-nav-group{flex-shrink:0}
+.app-sidebar .sidebar-subnav{display:flex;flex-direction:column;gap:2px;padding:0 0 0 9px;margin:3px 0 8px 18px;border:0;border-left:1px solid var(--line);min-height:0;background:none}
+.app-sidebar .sidebar-subnav button{background:none;border:0;border-radius:5px;text-align:left;padding:7px 9px;min-height:32px;font-size:12px;line-height:1.4;font-weight:400;color:var(--sub)}
+.app-sidebar .sidebar-subnav button:hover{background:var(--bg);color:var(--ink)}
+.app-sidebar[data-active-view="statistics"] #statistics-tabs button[aria-selected="true"],.app-sidebar[data-active-view="hr"] #hr-navigation button[aria-selected="true"]{background:var(--soft);color:var(--accent);font-weight:650}
+.sidebar-short{display:none}
+.sidebar-errors{border-top:1px solid var(--line);padding-top:10px;margin-top:7px;flex-shrink:0}
+.sidebar-footer{flex-shrink:0;position:relative;padding:10px 1px 8px}
+.sidebar-account{position:relative;border-top:1px solid var(--line);padding-top:10px}
+.sidebar-account summary{display:flex;align-items:center;gap:8px;list-style:none;cursor:pointer;padding:5px 7px;border-radius:6px;font-size:12px}
+.sidebar-account summary::-webkit-details-marker{display:none}
+.sidebar-account summary:hover{background:var(--bg)}
+.sidebar-avatar{display:grid;place-items:center;width:29px;height:29px;flex-shrink:0;border-radius:7px;background:var(--soft);color:var(--accent)}
+.sidebar-account-arrow{margin-left:auto;color:var(--sub)}
+.sidebar-account[open] .sidebar-account-arrow{transform:rotate(180deg)}
+.sidebar-account-menu{position:absolute;bottom:calc(100% + 6px);left:0;width:224px;max-width:calc(100vw - 24px);padding:6px;background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 24px #0002;z-index:20;display:grid;gap:3px}
+.sidebar-account:not([open]) .sidebar-account-menu{display:none}
+.sidebar-account-menu .action{width:100%;text-align:left;min-height:34px;border:0;background:none;font-size:12px;padding:7px 10px}
+.sidebar-account-menu .action:hover{background:var(--soft)}
+.app-sidebar .build-version{display:block;margin:9px 7px 0;font-size:10px;white-space:normal;line-height:1.4}
+.sidebar-collapsed .app-sidebar{padding:0 5px}
+.sidebar-collapsed .sidebar-brand{justify-content:center;padding:0}
+.sidebar-collapsed .sidebar-toggle{margin:0;transform:rotate(180deg)}
+.sidebar-collapsed .sidebar-brand .app-brand,.sidebar-collapsed .sidebar-label,.sidebar-collapsed .sidebar-account-arrow,.sidebar-collapsed .app-sidebar .build-version{display:none}
+.sidebar-collapsed .app-sidebar .app-tab{justify-content:center;padding:9px 5px}
+.sidebar-collapsed .app-sidebar .sidebar-subnav{margin:2px 0 7px;padding:0;border:0}
+.sidebar-collapsed .app-sidebar .sidebar-subnav button{text-align:center;padding:7px 1px;font-size:10px}
+.sidebar-collapsed .sidebar-short{display:inline}
+.sidebar-collapsed .sidebar-account summary{justify-content:center;padding:5px 0}
+.sidebar-collapsed .sidebar-footer{padding-left:0;padding-right:0}
+@media(pointer:coarse){.app-sidebar .app-tab,.app-sidebar .sidebar-subnav button,.sidebar-account summary,.sidebar-account-menu .action{min-height:44px}}
+</style>
 </head>
-<body>
-<header class="app-bar">
- <h1 class="app-brand">УБАИТ</h1>
- <nav class="app-tabs" id="app-tabs" role="tablist" aria-label="Разделы приложения"><button class="app-tab" role="tab" id="story-map-tab" data-view="map" aria-selected="true" aria-controls="viewport">Story Map</button><button class="app-tab" role="tab" id="kanban-tab" data-view="kanban" aria-selected="false" aria-controls="kanban-view" tabindex="-1">Kanban</button><button class="app-tab" role="tab" id="statistics-tab" data-view="statistics" aria-selected="false" aria-controls="statistics-shell" tabindex="-1">Статистика</button><button class="app-tab" role="tab" id="hr-tab" data-view="hr" aria-selected="false" aria-controls="hr-view" tabindex="-1">HR</button><button class="app-tab" role="tab" id="errors-tab" data-view="errors" aria-selected="false" aria-controls="errors-view" tabindex="-1">Ошибки</button></nav>
- <span class="build-version" title="Сборка 2026.11.10-v2.9.2 · Синхронизация HR">v2.9.2 · 10.11</span>
- <button class="action" id="logout" title="Выйти из аккаунта">Выйти</button>
- <button class="action" id="change-password" title="Сменить свой пароль">Сменить пароль</button>
- <button class="action" id="theme-toggle" title="Включить тёмную тему" aria-label="Включить тёмную тему">Светлая тема</button>
-</header>
+<body class="has-sidebar">
+<aside class="app-sidebar" id="app-sidebar" data-active-view="map" aria-label="Навигация">
+ <div class="sidebar-brand"><h1 class="app-brand">УБАИТ</h1><button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Свернуть меню" title="Свернуть меню" aria-expanded="true" aria-controls="app-tabs"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16m7-12-4 4 4 4"/></svg></button></div>
+ <nav class="app-tabs" id="app-tabs" aria-label="Разделы приложения">
+  <button class="app-tab" type="button" id="story-map-tab" data-view="map" aria-current="page" aria-controls="viewport" aria-label="Story Map" title="Story Map"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11m6-11v11"/></svg><span class="sidebar-label">Story Map</span></button>
+  <button class="app-tab" type="button" id="kanban-tab" data-view="kanban" aria-controls="kanban-view" aria-label="Kanban" title="Kanban"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="14" rx="1"/></svg><span class="sidebar-label">Kanban</span></button>
+  <div class="sidebar-nav-group">
+   <button class="app-tab sidebar-parent" type="button" id="statistics-tab" data-view="statistics" aria-controls="statistics-shell" aria-label="Статистика" title="Статистика"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3v17h17M8 15v-4m5 4V7m5 8V4"/></svg><span class="sidebar-label">Статистика</span></button>
+   <nav class="statistics-tabs sidebar-subnav" id="statistics-tabs" role="tablist" aria-orientation="vertical" aria-label="Вид статистики"><button id="statistics-scrum-tab" type="button" role="tab" data-statistics-mode="scrum" aria-controls="statistics-view" aria-selected="true" aria-label="Статистика: Scrum" title="Статистика: Scrum"><span class="sidebar-label">Scrum</span><span class="sidebar-short" aria-hidden="true">Scrum</span></button><button id="statistics-kanban-tab" type="button" role="tab" data-statistics-mode="kanban" aria-controls="kanban-statistics-view" aria-selected="false" tabindex="-1" aria-label="Статистика: Kanban" title="Статистика: Kanban"><span class="sidebar-label">Kanban</span><span class="sidebar-short" aria-hidden="true">Поток</span></button></nav>
+  </div>
+  <div class="sidebar-nav-group">
+   <button class="app-tab sidebar-parent" type="button" id="hr-tab" data-view="hr" aria-controls="hr-view" aria-label="HR" title="HR"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="7" r="3"/><path d="M3 20v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v3"/></svg><span class="sidebar-label">HR</span></button>
+   <nav class="sidebar-subnav" id="hr-navigation" role="tablist" aria-orientation="vertical" aria-label="Разделы HR">
+    <button id="hr-competencies-tab" type="button" role="tab" data-hr-tab="competencies" aria-selected="true" aria-controls="hr-tab-content" aria-label="HR: Компетенции" title="Компетенции"><span class="sidebar-label">Компетенции</span><span class="sidebar-short" aria-hidden="true">Навыки</span></button>
+    <button id="hr-kpi-tab" type="button" role="tab" data-hr-tab="kpi" aria-selected="false" tabindex="-1" aria-controls="hr-tab-content" aria-label="HR: KPI" title="KPI"><span class="sidebar-label">KPI</span><span class="sidebar-short" aria-hidden="true">KPI</span></button>
+    <button id="hr-ipr-tab" type="button" role="tab" data-hr-tab="ipr" aria-selected="false" tabindex="-1" aria-controls="hr-tab-content" aria-label="HR: ИПР" title="ИПР"><span class="sidebar-label">ИПР</span><span class="sidebar-short" aria-hidden="true">ИПР</span></button>
+    <button id="hr-employee-tab" type="button" role="tab" data-hr-tab="employee" aria-selected="false" tabindex="-1" aria-controls="hr-tab-content" aria-label="HR: Сотрудник" title="Сотрудник"><span class="sidebar-label">Сотрудник</span><span class="sidebar-short" aria-hidden="true">Профиль</span></button>
+   </nav>
+  </div>
+  <div class="sidebar-errors"><button class="app-tab" type="button" id="errors-tab" data-view="errors" aria-controls="errors-view" aria-label="Ошибки" title="Ошибки"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 4h.01"/></svg><span class="sidebar-label">Ошибки</span></button></div>
+ </nav>
+ <footer class="sidebar-footer">
+  <details class="sidebar-account" id="sidebar-account"><summary aria-label="Мой профиль" title="Мой профиль"><span class="sidebar-avatar"><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></span><span class="sidebar-label">Мой профиль</span><span class="sidebar-account-arrow" aria-hidden="true">⌃</span></summary><div class="sidebar-account-menu">
+   <button class="action" id="change-password" type="button" title="Сменить свой пароль">Сменить пароль</button>
+   <button class="action" id="theme-toggle" type="button" title="Включить тёмную тему" aria-label="Включить тёмную тему">Светлая тема</button>
+   <button class="action" id="logout" type="button" title="Выйти из аккаунта">Выйти</button>
+  </div></details>
+  <span class="build-version" title="Сборка 2026.11.12-v2.9.3 · Левое меню">v2.9.3 · 12.11</span>
+ </footer>
+</aside>
 <section class="app-panel" id="story-map-panel">
 <header class="toolbar">
  <label class="search"><input id="search" type="search" aria-label="Поиск историй, эпиков и проектов" placeholder="Поиск по названию или ID" autocomplete="off"></label>
@@ -120,7 +189,6 @@ dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);bor
 <main class="viewport" id="viewport" role="tabpanel" aria-labelledby="story-map-tab" aria-label="Карта проектов, эпиков и историй"><div class="matrix" id="matrix"></div></main>
 <section class="aux-view" id="errors-view" role="tabpanel" aria-labelledby="errors-tab" hidden></section>
 <section id="statistics-shell" role="tabpanel" aria-labelledby="statistics-tab" hidden>
- <nav class="statistics-tabs" id="statistics-tabs" role="tablist" aria-label="Вид статистики"><button id="statistics-scrum-tab" role="tab" data-statistics-mode="scrum" aria-controls="statistics-view" aria-selected="true">Scrum</button><button id="statistics-kanban-tab" role="tab" data-statistics-mode="kanban" aria-controls="kanban-statistics-view" aria-selected="false" tabindex="-1">Kanban</button></nav>
  <section class="aux-view" id="statistics-view" role="tabpanel" aria-labelledby="statistics-scrum-tab"></section>
  <section class="aux-view" id="kanban-statistics-view" role="tabpanel" aria-labelledby="statistics-kanban-tab" hidden></section>
 </section>
@@ -372,8 +440,9 @@ globalThis.StoryMapModel=(()=>{
   $('reset').disabled=!hasChanges()&&!statsState.focusPeriod;
  }
  function openStatisticsDetail(id,more=false){if(!statsReport)return;statsState.detailId=id;statsState.detailLimit=more?statsState.detailLimit+40:40;const content=globalThis.StoryMapStatistics.detail(statsReport,id,{escape,fmt,model:statisticsModel,focusPeriod:statsState.focusPeriod,limit:statsState.detailLimit});if(!content)return;$('detail-id').textContent='Статистика · '+globalThis.StoryMapStatistics.groups[statsState.groupBy];$('detail-body').innerHTML=content;$('detail').showModal();}
- function showView(next){view=next;for(const key of ['map','kanban','statistics','hr','errors']){const button=$(key==='map'?'story-map-tab':key+'-tab');button.setAttribute('aria-selected',String(view===key));button.setAttribute('tabindex',view===key?'0':'-1');}render(true);}
+ function showView(next){view=next;for(const key of ['map','kanban','statistics','hr','errors']){const button=$(key==='map'?'story-map-tab':key+'-tab');if(view===key)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current');}render(true);}
  function render(resetPosition=false){
+  $('app-sidebar').dataset.activeView=view;
   $('story-map-panel').dataset.view=view;$('story-map-panel').dataset.statisticsMode=statisticsMode;
   $('statistics-shell').hidden=view!=='statistics';$('kanban-statistics-view').hidden=view!=='statistics'||statisticsMode!=='kanban';
   for(const mode of ['scrum','kanban']){const b=$('statistics-'+mode+'-tab');b.setAttribute('aria-selected',String(mode===statisticsMode));b.setAttribute('tabindex',mode===statisticsMode?'0':'-1');}
@@ -430,10 +499,23 @@ globalThis.StoryMapModel=(()=>{
   finally{loading=false;$('loading-cover').hidden=true;$('refresh').disabled=false;$('story-map-panel').setAttribute('aria-busy','false');}
  }
  $('app-tabs').addEventListener('click',e=>{const next=e.target.closest('[data-view]')?.dataset.view;if(['map','kanban','statistics','hr','errors'].includes(next))showView(next);});
- $('app-tabs').addEventListener('keydown',e=>{const keys=['map','kanban','statistics','hr','errors'],i=keys.indexOf(view);let next;if(e.key==='ArrowRight')next=keys[(i+1)%keys.length];if(e.key==='ArrowLeft')next=keys[(i+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();showView(next);$(next==='map'?'story-map-tab':next+'-tab').focus();}});
+ $('app-tabs').addEventListener('keydown',e=>{if(e.target.closest('[role="tablist"]'))return;const keys=['map','kanban','statistics','hr','errors'],focused=e.target.closest('[data-view]')?.dataset.view,i=keys.indexOf(focused||view);let next;if(['ArrowRight','ArrowDown'].includes(e.key))next=keys[(i+1)%keys.length];if(['ArrowLeft','ArrowUp'].includes(e.key))next=keys[(i+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();showView(next);$(next==='map'?'story-map-tab':next+'-tab').focus();}});
  $('errors-view').addEventListener('click',e=>{const d=e.target.closest('button')?.dataset;if(!d)return;if(d.story)openStory(d.story);else if(d.epic)openEpic(d.epic);else if(d.errorMore){errorLimit+=60;renderOther();}});
- $('statistics-tabs').addEventListener('click',e=>{const mode=e.target.closest('[data-statistics-mode]')?.dataset.statisticsMode;if(['scrum','kanban'].includes(mode)){statisticsMode=mode;render(true);}});
- $('statistics-tabs').addEventListener('keydown',e=>{let mode;if(e.key==='ArrowRight'||e.key==='ArrowLeft')mode=statisticsMode==='scrum'?'kanban':'scrum';if(e.key==='Home')mode='scrum';if(e.key==='End')mode='kanban';if(mode){e.preventDefault();statisticsMode=mode;render(true);$('statistics-'+mode+'-tab').focus();}});
+ function selectStatistics(mode){statisticsMode=mode;if(view!=='statistics')showView('statistics');else render(true);}
+ $('statistics-tabs').addEventListener('click',e=>{const mode=e.target.closest('[data-statistics-mode]')?.dataset.statisticsMode;if(['scrum','kanban'].includes(mode))selectStatistics(mode);});
+ $('statistics-tabs').addEventListener('keydown',e=>{let mode;if(['ArrowRight','ArrowLeft','ArrowDown','ArrowUp'].includes(e.key))mode=statisticsMode==='scrum'?'kanban':'scrum';if(e.key==='Home')mode='scrum';if(e.key==='End')mode='kanban';if(mode){e.preventDefault();e.stopPropagation();selectStatistics(mode);$('statistics-'+mode+'-tab').focus();}});
+ function selectHrTab(key){if(globalThis.UbaitHR.selectTab($('hr-view'),key)&&view!=='hr')showView('hr');}
+ $('hr-navigation').addEventListener('click',e=>{const key=e.target.closest('[data-hr-tab]')?.dataset.hrTab;if(key)selectHrTab(key);});
+ $('hr-navigation').addEventListener('keydown',e=>{const keys=['competencies','kpi','ipr','employee'],current=e.target.closest('[data-hr-tab]')?.dataset.hrTab,i=keys.indexOf(current);if(i<0)return;let next;if(['ArrowRight','ArrowDown'].includes(e.key))next=keys[(i+1)%keys.length];if(['ArrowLeft','ArrowUp'].includes(e.key))next=keys[(i+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();e.stopPropagation();selectHrTab(next);$('hr-'+next+'-tab').focus();}});
+ let sidebarCollapsed=false;
+ try{const saved=localStorage.getItem('ubait-sidebar-collapsed');sidebarCollapsed=saved===null?window.matchMedia('(max-width:760px)').matches:saved==='true';}catch{sidebarCollapsed=window.matchMedia('(max-width:760px)').matches;}
+ function applySidebar(){document.body.classList.toggle('sidebar-collapsed',sidebarCollapsed);const button=$('sidebar-toggle');button.setAttribute('aria-expanded',String(!sidebarCollapsed));button.title=sidebarCollapsed?'Развернуть меню':'Свернуть меню';button.setAttribute('aria-label',button.title);requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')));}
+ applySidebar();
+ $('sidebar-toggle').addEventListener('click',()=>{sidebarCollapsed=!sidebarCollapsed;applySidebar();try{localStorage.setItem('ubait-sidebar-collapsed',String(sidebarCollapsed));}catch{}});
+ const account=$('sidebar-account');
+ account.addEventListener('click',e=>{if(e.target.closest('button'))account.open=false;});
+ document.addEventListener('click',e=>{if(account.open&&!account.contains(e.target))account.open=false;});
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&account.open){account.open=false;account.querySelector('summary').focus();e.preventDefault();}});
  $('stats-controls').addEventListener('click',e=>{const d=e.target.closest('button')?.dataset;if(!d?.statsMetric||!model)return;statsState.metric=d.statsMetric;renderOther();});
  $('statistics-view').addEventListener('click',e=>{const button=e.target.closest('button'),d=button?.dataset;if(!d||!statsReport||button.disabled||!isScrum())return;
   if(d.statRow!==undefined){openStatisticsDetail(d.statRow);return;}
