@@ -25,9 +25,9 @@ export function createCompensationApi({getScoped,store=createCompensationStore()
  async function authorized(user){const scoped=await getScoped(user,true);if(scoped.access.can_manage_compensation!==true)throw fault(403,'Этот раздел доступен только руководителям L0.');return scoped;}
  return {
   async enrich(scoped){
-   let saved;try{saved=await store.get();}catch{return {...scoped,cards:scoped.cards.map(c=>({...c,compensation:{status:'unavailable',fair_cost:null,indexation:null,reason:C.reasons.unavailable}}))};}
+   let saved;try{saved=await store.get();}catch{return {...scoped,...(scoped.access.can_manage_compensation===true?{compensation_settings:{error:'Не удалось загрузить настройки стоимости. Повторите загрузку.'}}:{}),cards:scoped.cards.map(c=>({...c,compensation:{status:'unavailable',fair_cost:null,indexation:null,reason:C.reasons.unavailable}}))};}
    const source=C.references(scoped.cards),analysis=C.analyze(scoped.cards,source,saved),values=new Map(analysis.rows.map(r=>[r.card.unit.task_id,r.value]));
-   return {...scoped,cards:scoped.cards.map(c=>({...c,compensation:values.get(c.unit.task_id)||C.calculate(c,source,saved)}))};
+   return {...scoped,...(scoped.access.can_manage_compensation===true?{compensation_settings:{saved:publicModel(saved,scoped),source}}:{}),cards:scoped.cards.map(c=>({...c,compensation:values.get(c.unit.task_id)||C.calculate(c,source,saved)}))};
   },
   async settings(user){const scoped=await authorized(user);return context(scoped,await store.get());},
   async save(user,body){

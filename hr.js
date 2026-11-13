@@ -93,7 +93,7 @@ globalThis.UbaitHR=(()=>{
     references.sort((a,b)=>String(a.unit.grade??'').localeCompare(String(b.unit.grade??''),'ru')||byName(a,b));
     const duplicates=new Map();for(const p of people)if(p.unit.staff_id)duplicates.set(String(p.unit.staff_id),(duplicates.get(String(p.unit.staff_id))||0)+1);
     people.forEach(p=>p.same_person_cards=duplicates.get(String(p.unit.staff_id))||1);
-    return {people,references,cards,year:yearNow(),meta:payload.meta,generated_at:payload.generated_at,access:payload.access};
+    return {people,references,cards,year:yearNow(),meta:payload.meta,generated_at:payload.generated_at,access:payload.access,compensation_settings:payload.compensation_settings};
   }
   function matchEmployee(data,fullName){
     const norm=v=>String(v||'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ');
@@ -534,14 +534,14 @@ globalThis.UbaitHR=(()=>{
         let payload;try{payload=await response.json();}catch{throw new Error('Сервер HR вернул не JSON. Проверь публикацию флоу HR.');}
         if(!response.ok){denied=response.status===403;throw new Error(payload.error||'HR API: HTTP '+response.status+'.');}
         if(payload.access?.policy_version!==1)throw new Error('На сервере ещё не включены права HR. Загрузи обновление R8 целиком.');
-        const loaded=parsePayload(payload),content=JSON.stringify([payload.access,payload.cards]);
-        changed=content!==lastContent;lastContent=content;data=loaded;
+        const loaded=parsePayload(payload),content=JSON.stringify([payload.access,payload.cards,payload.compensation_settings]);
+        changed=content!==lastContent;lastContent=content;data=loaded;compUI.hydrate(data);
         if(!data.people.some(p=>p.unit.task_id===state.person)){
           state.person=data.access.employee_task_id;state.referenceManual=false;
         }
         if(state.reference&&!data.references.some(r=>r.unit.task_id===state.reference)){state.reference='';state.referenceManual=false;}
       }catch(e){data=null;lastContent='';state.person='';state.reference='';error=e.name==='AbortError'?'HR не ответил за 70 секунд. Проверь выполнение флоу HR в n8n.':e.message;}
-      finally{clearTimeout(timer);loading=false;if(!background||changed||error)render();else paintSync();if(data?.access?.can_manage_compensation===true)void compUI.refresh();}
+      finally{clearTimeout(timer);loading=false;if(!background||changed||error)render();else paintSync();}
     }
     function skillDialog(code){
       const p=person(),skill=skillProfile(p,data,state.kind,code);if(!skill)return;
@@ -621,6 +621,7 @@ globalThis.UbaitHR=(()=>{
       else if(d.hrFilter&&['year','horizon','department','status'].includes(d.hrFilter)){state[d.hrFilter]=d.value??'';if(d.hrFilter==='year')state.horizon='';}
       else return;render();
     });
+    root.addEventListener('change',e=>{if(data)compUI.change(e.target);});
     root.addEventListener('input',e=>{if(!data)return;if(compUI.input(e.target))return;if(e.target.id==='hr-payroll-year'){payroll.year=e.target.value;return;}const keys={'hr-person-search':'query','hr-goal-search':'goalQuery','hr-ipr-search':'iprQuery'},key=keys[e.target.id];if(!key)return;state[key]=e.target.value;render(e.target.id,[e.target.selectionStart,e.target.selectionEnd]);});
     root.addEventListener('keydown',e=>{if(!data)return;const groupTab=e.target.closest('[data-hr-group]');if(groupTab){const count=definitions[state.kind].length,index=Number(groupTab.dataset.hrGroup);let next;if(e.key==='ArrowRight')next=(index+1)%count;if(e.key==='ArrowLeft')next=(index+count-1)%count;if(e.key==='Home')next=0;if(e.key==='End')next=count-1;if(next!==undefined){e.preventDefault();selectSkillGroup(next);}return;}const skillTab=e.target.closest('[data-hr-skill-tab]');if(skillTab){let next;if(e.key==='Home')next='description';if(e.key==='End')next='history';if(['ArrowLeft','ArrowRight'].includes(e.key))next=skillTab.dataset.hrSkillTab==='description'?'history':'description';if(next){e.preventDefault();selectSkillTab(next,true);}return;}const tab=e.target.closest('[data-hr-tab]');if(!tab)return;const keys=Object.keys(tabs).filter(k=>k!=='playground'||data.access?.can_manage_compensation===true),index=keys.indexOf(state.tab);let next;if(e.key==='ArrowRight')next=keys[(index+1)%keys.length];if(e.key==='ArrowLeft')next=keys[(index+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();state.tab=next;render('hr-'+next+'-tab');}});
     reloaders.set(root,async()=>{await load();if(data)void sync.check(true);});
