@@ -98,7 +98,7 @@ export function createCompetencyDocs({fetchImpl=fetch,now=Date.now,timeoutMs=600
   };
 }
 
-export const BUILD_VERSION='2026.11.12-v2.9.5';
+export const BUILD_VERSION='2026.11.13-v2.9.6';
 
 // Shared in-flight sync. Browsers poll this small status instead of holding an HTTP request open.
 export function createHrSync({webhookUrl,webhookSecret,fetchImpl=fetch,now=Date.now,invalidate=()=>{},timeoutMs=900000}){
@@ -184,6 +184,50 @@ export function hrWebhookAddress(mapAddress){
   target.search='';target.hash='';return target.href;
 }
 
+const KPI_XLSX='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const kpiFault=(status,message)=>Object.assign(new Error(message),{status});
+async function readKpiPeriod(req){
+  if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||''))throw kpiFault(415,'Нужен JSON-запрос.');
+  const chunks=[];let size=0;
+  for await(const chunk of req){size+=chunk.length;if(size>1024)throw kpiFault(413,'Слишком большой запрос.');chunks.push(chunk);}
+  let body;try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw kpiFault(400,'Выберите год и квартал.');}
+  if(!body||Array.isArray(body)||typeof body!=='object'||Object.keys(body).some(k=>!['year','quarter'].includes(k))||
+    !Number.isInteger(body.year)||body.year<1900||body.year>9999||!Number.isInteger(body.quarter)||body.quarter<1||body.quarter>4)throw kpiFault(400,'Выберите корректный год и квартал.');
+  return {year:body.year,quarter:body.quarter};
+}
+export function createKpiExporter({webhookUrl,webhookSecret,fetchImpl=fetch,timeoutMs=65000}){
+  return async function exportKpi(period,scoped){
+    if(scoped?.access?.can_export_kpi!==true)throw kpiFault(403,'Формирование реестра доступно только руководителям L0.');
+    const allowed_task_ids=scoped.cards.filter(c=>c.unit.is_reference!==true&&c.unit.status!=='Эталон').map(c=>c.unit.task_id);
+    let target;try{target=new URL(hrWebhookAddress(webhookUrl));target.pathname=target.pathname.replace(/reestr-hr-v1$/, 'reestr-kpi-excel-v1');}catch{throw kpiFault(503,'Проверьте настройку STORY_MAP_WEBHOOK_URL в Amvera.');}
+    if(target.protocol!=='https:'||target.username||target.password||!/^[A-Za-z0-9_-]{32,256}$/.test(webhookSecret||''))throw kpiFault(503,'Проверьте адрес n8n и N8N_WEBHOOK_SECRET в Amvera.');
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeoutMs);
+    try{
+      const response=await fetchImpl(target,{method:'POST',headers:{'Content-Type':'application/json',Accept:KPI_XLSX+', application/json','X-UBAIT-Key':webhookSecret},
+        body:JSON.stringify({...period,allowed_task_ids}),signal:controller.signal,redirect:'error'});
+      const type=(response.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
+      const limit=response.ok&&type===KPI_XLSX?50*1024*1024:64*1024;
+      if(Number(response.headers.get('content-length'))>limit){await response.body?.cancel();throw kpiFault(502,'Файл реестра превышает допустимый размер.');}
+      const reader=response.body?.getReader();if(!reader)throw kpiFault(502,'Сервис реестра вернул пустой ответ.');
+      const chunks=[];let size=0;
+      for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>limit){await reader.cancel();throw kpiFault(502,'Ответ сервиса реестра слишком большой.');}chunks.push(Buffer.from(value));}
+      const body=Buffer.concat(chunks);
+      if(!response.ok||type!==KPI_XLSX){
+        let code;try{code=JSON.parse(body.toString('utf8'))?.error?.code;}catch{}
+        if(code==='NO_DATA')throw kpiFault(422,'За выбранный период нет данных для реестра. Выберите другой квартал.');
+        if(response.status===404)throw kpiFault(503,'Флоу «UBAIT — KPI из базы → Excel v2» не активирован в n8n.');
+        if([401,403].includes(response.status))throw kpiFault(503,'Проверьте Header Auth «UBAIT Site API» у вебхука реестра в n8n.');
+        if(code==='DATABASE_READ_FAILED')throw kpiFault(503,'Не удалось прочитать KPI из БД. Повторите позже.');
+        throw kpiFault(502,'Не удалось сформировать Excel. Проверьте выполнение флоу реестра в n8n.');
+      }
+      if(body.length<4||body.readUInt32LE(0)!==0x04034b50)throw kpiFault(502,'Сервис реестра вернул некорректный файл Excel.');
+      return {body,filename:`Output_KPI_Report_${period.year}_Q${period.quarter}.xlsx`};
+    }catch(error){
+      if(error.status)throw error;
+      throw kpiFault(504,controller.signal.aborted?'Формирование заняло больше минуты. Повторите позже.':'Сервис формирования реестра временно недоступен.');
+    }finally{clearTimeout(timer);}
+  };
+}
 export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_URL, fetchImpl=fetch, now=Date.now, cacheMs=15000,
   webhookSecret=process.env.N8N_WEBHOOK_SECRET,origin=process.env.PUBLIC_ORIGIN,authOptions={}}={}) {
   const auth=createAuth({origin,...authOptions});
@@ -224,6 +268,8 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
   const competencyDocs=createCompetencyDocs({fetchImpl,now});
   const skillHistory=createSkillHistoryReader({webhookUrl,webhookSecret,fetchImpl});
   const hrSync=createHrSync({webhookUrl,webhookSecret,fetchImpl,now,invalidate:()=>hrUpstream.invalidate()});
+  const exportKpi=createKpiExporter({webhookUrl,webhookSecret,fetchImpl});
+  const kpiPending=new Set();
   const server=http.createServer(async(req,res)=>{
     res.setHeader('X-Content-Type-Options','nosniff');
     res.setHeader('Strict-Transport-Security','max-age=86400');
@@ -242,7 +288,8 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
       if(url.pathname==='/auth/change-password'&&req.method==='POST')return json(200,await auth.changePassword(req,res));
       if(auth.isAdminRoute(url.pathname))return await auth.proxyAdmin(req,res,url);
       const syncPost=url.pathname==='/api/hr/sync'&&req.method==='POST';
-      if(!['GET','HEAD'].includes(req.method)&&!syncPost){res.setHeader('Allow','GET, HEAD');return json(405,{error:'Только GET.'});}
+      const kpiPost=url.pathname==='/api/hr/kpi-export'&&req.method==='POST';
+      if(!['GET','HEAD'].includes(req.method)&&!syncPost&&!kpiPost){res.setHeader('Allow','GET, HEAD');return json(405,{error:'Только GET.'});}
       if(['/login','/login.js','/login.css'].includes(url.pathname)){
         const name=url.pathname==='/login'?'login.html':url.pathname.slice(1);
         res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
@@ -255,6 +302,23 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
         return json(e.status||503,{error:e.status===401?'Войдите в систему.':'Сервис входа временно недоступен.'});
       }
       if(url.pathname==='/auth/me')return json(200,user);
+      if(url.pathname==='/api/hr/kpi-export'){
+        res.setHeader('Vary','Cookie');
+        if(!kpiPost){res.setHeader('Allow','POST');return json(405,{error:'Только POST.'});}
+        if(req.headers.origin!==new URL(origin).origin||req.headers['sec-fetch-site']==='cross-site')return json(403,{error:'Формирование разрешено только со страницы сайта.'});
+        const period=await readKpiPeriod(req);
+        if(kpiPending.has(user.id))return json(409,{error:'Реестр уже формируется. Дождитесь скачивания.'});
+        kpiPending.add(user.id);
+        try{
+          // Fresh server-side scope; browser filters and selected employee never grant access.
+          hrUpstream.invalidate();
+          const scoped=authorizeHr(JSON.parse(await hrUpstream()),user);
+          const result=await exportKpi(period,scoped);
+          res.writeHead(200,{'Content-Type':KPI_XLSX,'Content-Disposition':`attachment; filename="${result.filename}"`,'Content-Length':result.body.length});
+          return res.end(result.body);
+        }catch(error){return json(error.status||502,{error:error.status?error.message:'Не удалось сформировать реестр. Повторите позже.'});}
+        finally{kpiPending.delete(user.id);}
+      }
       if(url.pathname==='/api/hr/sync'){
         res.setHeader('Vary','Cookie');
         if(syncPost&&(req.headers.origin!==new URL(origin).origin||req.headers['sec-fetch-site']==='cross-site'))return json(403,{error:'Запуск разрешён только со страницы сайта.'});

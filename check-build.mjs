@@ -17,7 +17,7 @@ for(const name of ['errors.js','stat.js','kanban.js','hr.js','auth-client.js']){
   assert(html.includes(`src="/${name}"`),`Missing module ${name}`);
   new Script(await readFile(new URL('./'+name,import.meta.url),'utf8'),{filename:name});
 }
-for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','kanban-tab','hr-tab','v2.9.5 · 12.11','taskMin','taskMax','stoppedEpicTotals','UbaitAFCT','Состав работ · АФКТ','id="app-sidebar"','id="hr-navigation"','id="sidebar-account"']){
+for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','kanban-tab','hr-tab','v2.9.6 · 13.11','taskMin','taskMax','stoppedEpicTotals','UbaitAFCT','Состав работ · АФКТ','id="app-sidebar"','id="hr-navigation"','id="sidebar-account"']){
   assert(html.includes(text),`Current UI is missing: ${text}`);
 }
 assert(!html.includes('<select'),'Old native-select interface must not be packaged.');
@@ -27,4 +27,7 @@ assert(html.includes('href="/hr.css"'));assert((await readFile(new URL('./hr.css
 assert(html.includes('statistics-shell')&&html.includes('statistics-scrum-tab')&&html.includes('kanban-statistics-view'),'Missing Scrum / Kanban sub-tabs');
 assert((await readFile(new URL('./stat.js',import.meta.url),'utf8')).includes('globalThis.UbaitKanbanStatistics='),'Missing Kanban analytics');
 assert((await readFile(new URL('./kanban.js',import.meta.url),'utf8')).includes('data-board-task'),'Missing read-only Kanban board');
+const hrSource=await readFile(new URL('./hr.js',import.meta.url),'utf8');
+assert(hrSource.includes('hr-payroll-open')&&hrSource.includes('/api/hr/kpi-export')&&hrSource.includes('lastCompletedQuarter'),'Missing KPI register action');
+assert((await readFile(new URL('./hr-access.mjs',import.meta.url),'utf8')).includes('can_export_kpi:level===0'),'Missing server-side KPI export capability');
 console.log(`Build verified: Story Map ${BUILD_VERSION}`);

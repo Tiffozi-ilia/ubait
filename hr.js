@@ -427,10 +427,56 @@ globalThis.UbaitHR=(()=>{
     tabSetters.get(root)?.(key);
     return true;
   }
+  function lastCompletedQuarter(date=new Date()){
+    const parts=new Intl.DateTimeFormat('en',{timeZone:'Europe/Moscow',year:'numeric',month:'numeric'}).formatToParts(date);
+    const year=Number(parts.find(p=>p.type==='year').value),quarter=Math.ceil(Number(parts.find(p=>p.type==='month').value)/3);
+    return quarter===1?{year:year-1,quarter:4}:{year,quarter:quarter-1};
+  }
+  async function requestKpiExport(period,{fetchImpl=fetch,signal}={}){
+    const response=await fetchImpl('/api/hr/kpi-export',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'},
+      credentials:'same-origin',cache:'no-store',body:JSON.stringify({year:period.year,quarter:period.quarter}),signal});
+    if(globalThis.UbaitAuth)await UbaitAuth.checked(response);
+    if(!response.ok){let body;try{body=await response.json();}catch{}throw Object.assign(new Error(typeof body?.error==='string'?body.error:'Не удалось сформировать реестр. Повторите позже.'),{status:response.status});}
+    if(!(response.headers.get('content-type')||'').startsWith('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'))throw new Error('Вместо Excel получен другой ответ. Повторите позже.');
+    const blob=await response.blob();if(!blob.size)throw new Error('Получен пустой файл реестра.');
+    return {blob,filename:`Output_KPI_Report_${period.year}_Q${period.quarter}.xlsx`};
+  }
   function mount(root){
     if(root.dataset.hrMounted==='true'){void reloaders.get(root)?.();return;}
     root.dataset.hrMounted='true';
     let data=null,loading=false,error='',denied=false,lastContent='',activeLoad=null;
+    const payroll={...lastCompletedQuarter(),open:false,busy:false,message:'',error:false};
+    let payrollController=null;
+    function closePayroll(){payroll.open=false;payrollController?.abort();root.querySelector('#hr-payroll-dialog')?.close();}
+    function payrollDialog(){
+      return `<dialog id="hr-payroll-dialog" class="hr-dialog hr-payroll-dialog" aria-labelledby="hr-payroll-title"><div class="dialog-top"><h2 id="hr-payroll-title">Реестр на выплату</h2><button class="action" data-hr-payroll-close="true" aria-label="Закрыть выбор периода">Закрыть</button></div><div class="detail-body"><p class="hr-payroll-scope">Все доступные вам сотрудники. Выбор карточки и фильтры HR не ограничивают реестр.</p><label class="hr-payroll-year">Год<input id="hr-payroll-year" type="number" min="1900" max="9999" step="1" value="${esc(payroll.year)}" ${payroll.busy?'disabled':''}></label><div class="hr-payroll-quarters" role="group" aria-label="Квартал">${[1,2,3,4].map(q=>`<button type="button" data-hr-payroll-quarter="${q}" aria-pressed="${q===payroll.quarter}" ${payroll.busy?'disabled':''}>${q} квартал</button>`).join('')}</div><div id="hr-payroll-progress" class="hr-payroll-progress" role="status" ${payroll.busy?'':'hidden'}><progress aria-label="Формирование Excel"></progress><span>Формируем Excel…</span></div><p id="hr-payroll-message" class="hr-payroll-message" role="${payroll.error?'alert':'status'}" ${payroll.message?'':'hidden'}>${esc(payroll.message)}</p><div class="hr-payroll-footer"><button class="action" data-hr-payroll-close="true">Отмена</button><button class="action primary" data-hr-payroll-submit="true" ${payroll.busy?'disabled':''}>Сформировать Excel</button></div></div></dialog>`;
+    }
+    function paintPayroll(){
+      const dialog=root.querySelector('#hr-payroll-dialog');if(!dialog)return;
+      dialog.querySelectorAll('[data-hr-payroll-quarter],#hr-payroll-year,[data-hr-payroll-submit]').forEach(el=>{el.disabled=payroll.busy;});
+      dialog.querySelectorAll('[data-hr-payroll-quarter]').forEach(el=>el.setAttribute('aria-pressed',String(Number(el.dataset.hrPayrollQuarter)===payroll.quarter)));
+      dialog.setAttribute('aria-busy',String(payroll.busy));
+      const progress=root.querySelector('#hr-payroll-progress');if(progress)progress.hidden=!payroll.busy;
+      const message=root.querySelector('#hr-payroll-message');if(message){message.textContent=payroll.message;message.hidden=!payroll.message;message.setAttribute('role',payroll.error?'alert':'status');}
+    }
+    async function generatePayroll(){
+      if(payroll.busy||data?.access?.can_export_kpi!==true)return;
+      const input=root.querySelector('#hr-payroll-year'),year=Number(input?.value);
+      if(!Number.isInteger(year)||year<1900||year>9999){payroll.message='Укажите год от 1900 до 9999.';payroll.error=true;paintPayroll();input?.focus();return;}
+      payroll.year=year;payroll.busy=true;payroll.message='';payroll.error=false;paintPayroll();
+      const controller=new AbortController();payrollController=controller;
+      let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},70000);
+      try{
+        const result=await requestKpiExport({year,quarter:payroll.quarter},{signal:controller.signal});
+        if(controller.signal.aborted)return;
+        const address=URL.createObjectURL(result.blob),link=document.createElement('a');link.href=address;link.download=result.filename;link.hidden=true;
+        document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(address),60000);
+        payroll.message='Реестр готов. Скачивание началось.';
+      }catch(e){
+        if(timedOut||!controller.signal.aborted){payroll.error=true;payroll.message=timedOut?'Формирование заняло больше минуты. Повторите позже.':e.message;}
+        if(e.status===401||e.status===403)void load({silent:true});
+      }finally{clearTimeout(timer);payrollController=null;payroll.busy=false;paintPayroll();}
+    }
     const loadDocs=createDocsLoader(),loadHistory=createHistoryLoader();
     let openedSkill=null,historyController=null;
     const cancelHistory=()=>{historyController?.abort();historyController=null;openedSkill=null;};
@@ -453,8 +499,9 @@ globalThis.UbaitHR=(()=>{
       root.dataset.hrSelectedTab=state.tab;
       navigation?.querySelectorAll('[data-hr-tab]').forEach(button=>{const active=button.dataset.hrTab===state.tab;button.setAttribute('aria-selected',String(active));button.setAttribute('tabindex',active?'0':'-1');});
       const accessLabel=data?.access?data.access.level+' · '+({self:'Мой профиль',department:'Мой отдел',all:'Все доступные сотрудники'}[data.access.scope]||'HR'):'';
-      const nav=(navigation?'<div class="hr-subnav" role="group" aria-label="Обновление HR">':'<nav class="hr-subnav" role="tablist" aria-label="Разделы HR">'+Object.entries(tabs).map(([k,t])=>'<button id="hr-'+k+'-tab" role="tab" data-hr-tab="'+k+'" aria-selected="'+(state.tab===k)+'" tabindex="'+(state.tab===k?'0':'-1')+'" aria-controls="hr-tab-content">'+t+'</button>').join(''))+'<span class="hr-live" title="'+esc(accessLabel?accessLabel+' · Срез '+timestamp(data.generated_at):'Источник: штатный реестр 405691')+'">'+esc(accessLabel||'Штатка · БД')+'</span><button id="hr-push-sync" class="hr-push-sync" data-hr-sync="true" title="Загрузить изменения из Pyrus в БД и сохранить историю оценок">Синхронизировать</button><button class="hr-refresh" data-hr-refresh="true" '+(loading?'disabled':'')+' aria-label="Перечитать HR из БД" title="Перечитать данные и права доступа из БД" >↻</button>'+(navigation?'</div>':'</nav>')+'<div id="hr-sync-state" class="hr-sync-state" role="status" aria-live="polite" hidden></div>';
+      const nav=(navigation?'<div class="hr-subnav" role="group" aria-label="Обновление HR">':'<nav class="hr-subnav" role="tablist" aria-label="Разделы HR">'+Object.entries(tabs).map(([k,t])=>'<button id="hr-'+k+'-tab" role="tab" data-hr-tab="'+k+'" aria-selected="'+(state.tab===k)+'" tabindex="'+(state.tab===k?'0':'-1')+'" aria-controls="hr-tab-content">'+t+'</button>').join(''))+(state.tab==='kpi'&&data?.access?.can_export_kpi===true?'<button id="hr-payroll-open" class="hr-payroll-trigger" data-hr-payroll-open="true">Сформировать реестр на выплату</button>':'')+'<span class="hr-live" title="'+esc(accessLabel?accessLabel+' · Срез '+timestamp(data.generated_at):'Источник: штатный реестр 405691')+'">'+esc(accessLabel||'Штатка · БД')+'</span><button id="hr-push-sync" class="hr-push-sync" data-hr-sync="true" title="Загрузить изменения из Pyrus в БД и сохранить историю оценок">Синхронизировать</button><button class="hr-refresh" data-hr-refresh="true" '+(loading?'disabled':'')+' aria-label="Перечитать HR из БД" title="Перечитать данные и права доступа из БД" >↻</button>'+(navigation?'</div>':'</nav>')+'<div id="hr-sync-state" class="hr-sync-state" role="status" aria-live="polite" hidden></div>';
       if(!data){
+        payroll.open=false;payrollController?.abort();
         root.innerHTML=nav+(loading?spinner():'<div class="hr-empty" role="alert"><h3>'+(denied?'Доступ к HR не настроен':'HR не подключён')+'</h3><p>'+esc(error||'Нет ответа от HR API.')+'</p><button class="action" data-hr-refresh="true">Повторить загрузку</button></div>');
         paintSync();return;
       }
@@ -470,9 +517,12 @@ globalThis.UbaitHR=(()=>{
         (p?'<header class="hr-identity"><span class="hr-avatar" aria-hidden="true">'+initials(p.unit.staff||p.unit.status)+'</span><div><h2>'+esc(title(p))+'</h2><p>'+esc([p.unit.position,p.unit.team].filter(Boolean).join(' · '))+' · <a href="https://pyrus.sovcombank.ru/t#id'+p.unit.task_id+'" target="_blank" rel="noopener noreferrer">#'+p.unit.task_id+' ↗</a></p></div><div class="hr-identity-tags">'+pill(calculatedGrade(p,data,state.kind).label,'accent')+pill(p.unit.status||'Без статуса')+'</div></header>':'')+
         '<section id="hr-tab-content" class="hr-content" role="tabpanel" aria-labelledby="hr-'+state.tab+'-tab">'+
         (!p?'<div class="hr-empty"><h3>Сотрудник не выбран</h3><p>Измени поиск или фильтры отдела и статуса. В списке только доступные тебе карточки.</p></div>':missing+same+(state.tab==='competencies'?competencies(p,data,state):state.tab==='kpi'?kpi(p,state):state.tab==='ipr'?ipr(p,state):employee(p,data,state.kind)))+
-        '</section></div></div><dialog id="hr-skill-dialog" class="hr-dialog" aria-labelledby="hr-skill-title"><div class="dialog-top"><span class="hr-source" id="hr-dialog-label">Профиль навыка</span><button class="action" data-hr-close="true">Закрыть</button></div><div class="detail-body" id="hr-skill-body"></div></dialog>';
+        '</section></div></div><dialog id="hr-skill-dialog" class="hr-dialog" aria-labelledby="hr-skill-title"><div class="dialog-top"><span class="hr-source" id="hr-dialog-label">Профиль навыка</span><button class="action" data-hr-close="true">Закрыть</button></div><div class="detail-body" id="hr-skill-body"></div></dialog>'+(data.access?.can_export_kpi===true?payrollDialog():'');
       root.querySelector('#hr-skill-dialog')?.addEventListener?.('close',cancelHistory);
       paintSync();
+      const payrollModal=root.querySelector('#hr-payroll-dialog');
+      if(payrollModal){payrollModal.addEventListener('cancel',()=>{payroll.open=false;payrollController?.abort();});if(payroll.open)payrollModal.showModal();paintPayroll();}
+      else{payroll.open=false;payrollController?.abort();}
       if(focusId){const el=root.querySelector('#'+focusId)||navigation?.querySelector('#'+focusId);el?.focus({preventScroll:true});if(selection&&el?.setSelectionRange)el.setSelectionRange(...selection);}
     }
     function load(options={}){
@@ -551,6 +601,10 @@ globalThis.UbaitHR=(()=>{
       const button=e.target.closest('button'),d=button?.dataset;if(!d)return;
       if(d.hrRefresh){void load();return;}
       if(!data)return;
+      if(d.hrPayrollClose){closePayroll();return;}
+      if(d.hrPayrollOpen&&data.access?.can_export_kpi===true){if(!payroll.busy){Object.assign(payroll,lastCompletedQuarter(),{message:'',error:false});const input=root.querySelector('#hr-payroll-year');if(input)input.value=payroll.year;}payroll.open=true;paintPayroll();root.querySelector('#hr-payroll-dialog')?.showModal();return;}
+      if(d.hrPayrollQuarter&&!payroll.busy){const q=Number(d.hrPayrollQuarter);if(q>=1&&q<=4)payroll.quarter=q;paintPayroll();return;}
+      if(d.hrPayrollSubmit){void generatePayroll();return;}
       if(d.hrSalary){
         const p=person(),value=root.querySelector('#hr-salary-value');if(!p||!value)return;
         const visible=button.getAttribute('aria-pressed')!=='true';
@@ -573,7 +627,7 @@ globalThis.UbaitHR=(()=>{
       else if(d.hrFilter&&['year','horizon','department','status'].includes(d.hrFilter)){state[d.hrFilter]=d.value??'';if(d.hrFilter==='year')state.horizon='';}
       else return;render();
     });
-    root.addEventListener('input',e=>{if(!data)return;const keys={'hr-person-search':'query','hr-goal-search':'goalQuery','hr-ipr-search':'iprQuery'},key=keys[e.target.id];if(!key)return;state[key]=e.target.value;render(e.target.id,[e.target.selectionStart,e.target.selectionEnd]);});
+    root.addEventListener('input',e=>{if(!data)return;if(e.target.id==='hr-payroll-year'){payroll.year=e.target.value;return;}const keys={'hr-person-search':'query','hr-goal-search':'goalQuery','hr-ipr-search':'iprQuery'},key=keys[e.target.id];if(!key)return;state[key]=e.target.value;render(e.target.id,[e.target.selectionStart,e.target.selectionEnd]);});
     root.addEventListener('keydown',e=>{if(!data)return;const groupTab=e.target.closest('[data-hr-group]');if(groupTab){const count=definitions[state.kind].length,index=Number(groupTab.dataset.hrGroup);let next;if(e.key==='ArrowRight')next=(index+1)%count;if(e.key==='ArrowLeft')next=(index+count-1)%count;if(e.key==='Home')next=0;if(e.key==='End')next=count-1;if(next!==undefined){e.preventDefault();selectSkillGroup(next);}return;}const skillTab=e.target.closest('[data-hr-skill-tab]');if(skillTab){let next;if(e.key==='Home')next='description';if(e.key==='End')next='history';if(['ArrowLeft','ArrowRight'].includes(e.key))next=skillTab.dataset.hrSkillTab==='description'?'history':'description';if(next){e.preventDefault();selectSkillTab(next,true);}return;}const tab=e.target.closest('[data-hr-tab]');if(!tab)return;const keys=Object.keys(tabs),index=keys.indexOf(state.tab);let next;if(e.key==='ArrowRight')next=keys[(index+1)%keys.length];if(e.key==='ArrowLeft')next=keys[(index+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();state.tab=next;render('hr-'+next+'-tab');}});
     reloaders.set(root,async()=>{await load();if(data)void sync.check(true);});
     // Recheck permissions when opening HR, returning to the page and every minute
@@ -586,5 +640,5 @@ globalThis.UbaitHR=(()=>{
     }
     void load().then(()=>{if(data)void sync.check(true);});
   }
-  return {mount,selectTab,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,calculatedGrade,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading,parseSkillHistory,createHistoryLoader,skillHistoryChart,skillHistory,createSyncClient};
+  return {mount,selectTab,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,calculatedGrade,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading,parseSkillHistory,createHistoryLoader,skillHistoryChart,skillHistory,createSyncClient,lastCompletedQuarter,requestKpiExport};
 })();

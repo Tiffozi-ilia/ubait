@@ -58,7 +58,7 @@ export function authorizeHr(payload,account){
   });
   const references=cards.filter(isReference);
   return {schema_version:1,dataset:'hr',api_revision:1,source_form_id:405691,generated_at:payload.generated_at,
-    access:{policy_version:1,level:'L-'+Math.abs(level),scope:level===0?'all':level===-1?'department':'self',employee_task_id:own.unit.task_id,department:own.unit.team??null},
+    access:{policy_version:1,level:'L-'+Math.abs(level),scope:level===0?'all':level===-1?'department':'self',employee_task_id:own.unit.task_id,department:own.unit.team??null,can_export_kpi:level===0},
     meta:{card_count:cards.length,employee_card_count:cards.length-references.length,reference_card_count:references.length,
       kpi_row_count:cards.reduce((n,c)=>n+c.kpi.length,0),ipr_row_count:cards.reduce((n,c)=>n+c.skills.length,0),
       last_source_update:newest(cards.map(c=>c.unit.last_modified_date)),last_database_update:newest(cards.map(c=>c.unit.loaded_at)),
