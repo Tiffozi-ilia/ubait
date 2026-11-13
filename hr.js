@@ -382,6 +382,11 @@ globalThis.UbaitHR=(()=>{
   const syncText=s=>s.status==='requesting'?'Запускаем загрузку из Pyrus…':s.status==='running'?'Синхронизация HR с Pyrus… Можно продолжать работу.':s.status==='completed'?(s.warnings?'HR обновлён. Есть замечания загрузки — администратор увидит их в n8n.':'HR и история оценок обновлены · '+timestamp(s.finished_at)):s.status==='unconfirmed'?'Не удалось подтвердить завершение. Проверь данные кнопкой ↻; если они не обновились — выполнение флоу в n8n.':s.status==='disconnected'?'Не удалось получить статус. Нажми «Проверить синхронизацию».':'';
   const reloaders=new WeakMap();
   const tabSetters=new WeakMap();
+  function preload(root){
+    if(!root)return;
+    if(root.dataset.hrMounted==='true'){void reloaders.get(root)?.({silent:true});return;}
+    mount(root);
+  }
   function selectTab(root,key){
     if(!root||!Object.hasOwn(tabs,key))return false;
     root.dataset.hrSelectedTab=key;
@@ -484,6 +489,11 @@ globalThis.UbaitHR=(()=>{
       if(state.tab==='playground'&&data?.access?.can_manage_compensation!==true)state.tab='employee';
       root.dataset.hrSelectedTab=state.tab;
       navigation?.querySelectorAll('[data-hr-tab]').forEach(button=>{button.hidden=button.dataset.hrTab==='playground'&&data?.access?.can_manage_compensation!==true;const active=button.dataset.hrTab===state.tab;button.setAttribute('aria-selected',String(active));button.setAttribute('tabindex',active?'0':'-1');});
+      const menuState=document.getElementById('hr-navigation-state'),menuRetry=document.getElementById('hr-navigation-retry');
+      if(menuState){menuState.textContent=!data?(loading?'Загружаем разделы…':error?'Не удалось загрузить HR':''):'';menuState.hidden=!menuState.textContent;}
+      if(menuRetry){menuRetry.hidden=Boolean(data)||loading||!error;menuRetry.disabled=loading;}
+      navigation?.setAttribute('aria-busy',String(loading&&!data));
+      navigation?.dispatchEvent(new Event('hr-navigation-updated'));
       const accessLabel=data?.access?data.access.level+' · '+({self:'Мой профиль',department:'Мой отдел',all:'Все доступные сотрудники'}[data.access.scope]||'HR'):'';
       const nav=(navigation?'<div class="hr-subnav" role="group" aria-label="Обновление HR">':'<nav class="hr-subnav" role="tablist" aria-label="Разделы HR">'+Object.entries(tabs).filter(([k])=>k!=='playground'||data?.access?.can_manage_compensation===true).map(([k,t])=>'<button id="hr-'+k+'-tab" role="tab" data-hr-tab="'+k+'" aria-selected="'+(state.tab===k)+'" tabindex="'+(state.tab===k?'0':'-1')+'" aria-controls="hr-tab-content">'+t+'</button>').join(''))+(state.tab==='kpi'&&data?.access?.can_export_kpi===true?'<button id="hr-payroll-open" class="hr-payroll-trigger" data-hr-payroll-open="true">Сформировать реестр на выплату</button>':'')+(state.tab==='ipr'&&data?.access?.can_export_indexation===true?'<button id="hr-indexation-open" class="hr-payroll-trigger" data-hr-indexation-open="true">Сформировать реестр на индексацию</button>':'')+'<span class="hr-live" title="'+esc(accessLabel?accessLabel+' · Срез '+timestamp(data.generated_at):'Источник: штатный реестр 405691')+'">'+esc(accessLabel||'Штатка · БД')+'</span><button id="hr-push-sync" class="hr-push-sync" data-hr-sync="true" title="Загрузить изменения из Pyrus в БД и сохранить историю оценок">Синхронизировать</button><button class="hr-refresh" data-hr-refresh="true" '+(loading?'disabled':'')+' aria-label="Перечитать HR из БД" title="Перечитать данные и права доступа из БД" >↻</button>'+(navigation?'</div>':'</nav>')+'<div id="hr-sync-state" class="hr-sync-state" role="status" aria-live="polite" hidden></div>';
       if(!data){
@@ -624,7 +634,7 @@ globalThis.UbaitHR=(()=>{
     root.addEventListener('change',e=>{if(data)compUI.change(e.target);});
     root.addEventListener('input',e=>{if(!data)return;if(compUI.input(e.target))return;if(e.target.id==='hr-payroll-year'){payroll.year=e.target.value;return;}const keys={'hr-person-search':'query','hr-goal-search':'goalQuery','hr-ipr-search':'iprQuery'},key=keys[e.target.id];if(!key)return;state[key]=e.target.value;render(e.target.id,[e.target.selectionStart,e.target.selectionEnd]);});
     root.addEventListener('keydown',e=>{if(!data)return;const groupTab=e.target.closest('[data-hr-group]');if(groupTab){const count=definitions[state.kind].length,index=Number(groupTab.dataset.hrGroup);let next;if(e.key==='ArrowRight')next=(index+1)%count;if(e.key==='ArrowLeft')next=(index+count-1)%count;if(e.key==='Home')next=0;if(e.key==='End')next=count-1;if(next!==undefined){e.preventDefault();selectSkillGroup(next);}return;}const skillTab=e.target.closest('[data-hr-skill-tab]');if(skillTab){let next;if(e.key==='Home')next='description';if(e.key==='End')next='history';if(['ArrowLeft','ArrowRight'].includes(e.key))next=skillTab.dataset.hrSkillTab==='description'?'history':'description';if(next){e.preventDefault();selectSkillTab(next,true);}return;}const tab=e.target.closest('[data-hr-tab]');if(!tab)return;const keys=Object.keys(tabs).filter(k=>k!=='playground'||data.access?.can_manage_compensation===true),index=keys.indexOf(state.tab);let next;if(e.key==='ArrowRight')next=keys[(index+1)%keys.length];if(e.key==='ArrowLeft')next=keys[(index+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();state.tab=next;render('hr-'+next+'-tab');}});
-    reloaders.set(root,async()=>{await load();if(data)void sync.check(true);});
+    reloaders.set(root,async(options={})=>{await load(options);if(data)void sync.check(true);});
     // Recheck permissions when opening HR, returning to the page and every minute
     // while visible. Failed checks clear the previously displayed personnel data.
     if(globalThis.document&&typeof setInterval==='function'){
@@ -636,5 +646,5 @@ globalThis.UbaitHR=(()=>{
     }
     void load().then(()=>{if(data)void sync.check(true);});
   }
-  return {mount,selectTab,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,calculatedGrade,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading,parseSkillHistory,createHistoryLoader,skillHistoryChart,skillHistory,createSyncClient,lastCompletedQuarter,requestKpiExport};
+  return {mount,preload,selectTab,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,calculatedGrade,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading,parseSkillHistory,createHistoryLoader,skillHistoryChart,skillHistory,createSyncClient,lastCompletedQuarter,requestKpiExport};
 })();
