@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light"><meta name="robots" content="noindex,nofollow">
-<meta name="app-version" content="2026.11.13-v2.9.6">
-<meta name="ui-revision" content="R20-kpi-export">
+<meta name="app-version" content="2026.11.13-v2.10.0">
+<meta name="ui-revision" content="R21-compensation">
 <title>УБАИТ · Команда и продукты</title>
 <link rel="stylesheet" href="/hr.css">
 <style>
@@ -204,7 +204,7 @@ SOFTWARE.
   </div>
   <div class="sidebar-nav-group">
    <button class="app-tab sidebar-parent" type="button" id="hr-tab" data-view="hr" data-sidebar-group="hr" aria-expanded="false" aria-controls="hr-navigation" aria-label="HR" title="HR"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg><span class="sidebar-label">HR</span><span class="sidebar-group-arrow"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span></button>
-   <nav class="sidebar-subnav" id="hr-navigation" role="tablist" aria-orientation="vertical" aria-label="Разделы HR" hidden><span class="sidebar-menu-heading" role="presentation">HR</span><button id="hr-competencies-tab" type="button" role="tab" data-hr-tab="competencies" aria-selected="true" aria-controls="hr-tab-content" aria-label="HR: Компетенции"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg><span class="sidebar-label">Компетенции</span></button><button id="hr-kpi-tab" type="button" role="tab" data-hr-tab="kpi" aria-selected="false" tabindex="-1" aria-controls="hr-tab-content" aria-label="HR: KPI"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg><span class="sidebar-label">KPI</span></button><button id="hr-ipr-tab" type="button" role="tab" data-hr-tab="ipr" aria-selected="false" tabindex="-1" aria-controls="hr-tab-content" aria-label="HR: ИПР"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg><span class="sidebar-label">ИПР</span></button><button id="hr-employee-tab" type="button" role="tab" data-hr-tab="employee" aria-selected="false" tabindex="-1" aria-controls="hr-tab-content" aria-label="HR: Сотрудник"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M16 2v2"/><path d="M17.915 22a6 6 0 0 0-12 0"/><path d="M8 2v2"/><circle cx="12" cy="12" r="4"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg><span class="sidebar-label">Сотрудник</span></button></nav>
+   <nav class="sidebar-subnav" id="hr-navigation" role="tablist" aria-orientation="vertical" aria-label="Разделы HR" hidden><span class="sidebar-menu-heading" role="presentation">HR</span><button id="hr-competencies-tab" type="button" role="tab" data-hr-tab="competencies" aria-selected="true" aria-controls="hr-tab-content" aria-label="HR: Компетенции"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg><span class="sidebar-label">Компетенции</span></button><button id="hr-kpi-tab" type="button" role="tab" data-hr-tab="kpi" aria-selected="false" tabindex="-1" aria-controls="hr-tab-content" aria-label="HR: KPI"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg><span class="sidebar-label">KPI</span></button><button id="hr-ipr-tab" type="button" role="tab" data-hr-tab="ipr" aria-selected="false" tabindex="-1" aria-controls="hr-tab-content" aria-label="HR: ИПР"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></svg><span class="sidebar-label">ИПР</span></button><button id="hr-employee-tab" type="button" role="tab" data-hr-tab="employee" aria-selected="false" tabindex="-1" aria-controls="hr-tab-content" aria-label="HR: Сотрудник"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="M16 2v2"/><path d="M17.915 22a6 6 0 0 0-12 0"/><path d="M8 2v2"/><circle cx="12" cy="12" r="4"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg><span class="sidebar-label">Сотрудник</span></button><button id="hr-playground-tab" type="button" role="tab" data-hr-tab="playground" aria-selected="false" tabindex="-1" aria-controls="hr-tab-content" aria-label="HR: Playgound" hidden><svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V14M4 10V3M12 21V12M12 8V3M20 21V16M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span class="sidebar-label">Playgound</span></button></nav>
   </div>
   <div class="sidebar-errors"><button class="app-tab" type="button" id="errors-tab" data-view="errors" aria-controls="errors-view" aria-label="Ошибки" title="Ошибки"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg><span class="sidebar-label">Ошибки</span></button></div>
  </nav>
@@ -214,7 +214,7 @@ SOFTWARE.
    <button class="action" id="theme-toggle" type="button" title="Включить тёмную тему" aria-label="Включить тёмную тему"><span>Светлая тема</span></button>
    <button class="action" id="logout" type="button" title="Выйти из аккаунта"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>Выйти</button>
   </div></details>
-  <span class="build-version" title="Сборка 2026.11.13-v2.9.6">v2.9.6 · 13.11</span>
+  <span class="build-version" title="Сборка 2026.11.13-v2.10.0">v2.10.0 · 13.11</span>
  </footer>
 </aside>
 <section class="app-panel" id="story-map-panel">
@@ -423,6 +423,9 @@ globalThis.StoryMapModel=(()=>{
 <script src="/errors.js"></script>
 <script src="/stat.js"></script>
 <script src="/kanban.js"></script>
+<script src="/hr-model.js"></script>
+<script src="/compensation.js"></script>
+<script src="/compensation-ui.js"></script>
 <script src="/hr.js"></script>
 <script id="story-map-app">
 (()=>{
@@ -577,7 +580,7 @@ globalThis.StoryMapModel=(()=>{
  $('statistics-tabs').addEventListener('keydown',e=>{let mode;if(['ArrowRight','ArrowLeft','ArrowDown','ArrowUp'].includes(e.key))mode=statisticsMode==='scrum'?'kanban':'scrum';if(e.key==='Home')mode='scrum';if(e.key==='End')mode='kanban';if(mode){e.preventDefault();e.stopPropagation();selectStatistics(mode,true);$('statistics-'+mode+'-tab').focus();}});
  function selectHrTab(key,keepOpen=false){if(!globalThis.UbaitHR.selectTab($('hr-view'),key))return;if(view!=='hr')showView('hr');finishSidebarSelection('hr',keepOpen);}
  $('hr-navigation').addEventListener('click',e=>{const key=e.target.closest('[data-hr-tab]')?.dataset.hrTab;if(key)selectHrTab(key);});
- $('hr-navigation').addEventListener('keydown',e=>{const keys=['competencies','kpi','ipr','employee'],current=e.target.closest('[data-hr-tab]')?.dataset.hrTab,i=keys.indexOf(current);if(i<0)return;let next;if(['ArrowRight','ArrowDown'].includes(e.key))next=keys[(i+1)%keys.length];if(['ArrowLeft','ArrowUp'].includes(e.key))next=keys[(i+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();e.stopPropagation();selectHrTab(next,true);$('hr-'+next+'-tab').focus();}});
+ $('hr-navigation').addEventListener('keydown',e=>{const keys=['competencies','kpi','ipr','employee','playground'].filter(k=>!$('hr-'+k+'-tab').hidden),current=e.target.closest('[data-hr-tab]')?.dataset.hrTab,i=keys.indexOf(current);if(i<0)return;let next;if(['ArrowRight','ArrowDown'].includes(e.key))next=keys[(i+1)%keys.length];if(['ArrowLeft','ArrowUp'].includes(e.key))next=keys[(i+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();e.stopPropagation();selectHrTab(next,true);$('hr-'+next+'-tab').focus();}});
  try{sidebarCollapsed=localStorage.getItem('ubait-sidebar-collapsed-v2')==='true';}catch{}
  function applySidebar(){document.body.classList.toggle('sidebar-collapsed',sidebarCollapsed);const button=$('sidebar-toggle');button.setAttribute('aria-expanded',String(!sidebarCollapsed));button.title=sidebarCollapsed?'Развернуть меню':'Свернуть меню';button.setAttribute('aria-label',button.title);updateSidebarMenu();requestAnimationFrame(()=>window.dispatchEvent(new Event('resize')));}
  applySidebar();

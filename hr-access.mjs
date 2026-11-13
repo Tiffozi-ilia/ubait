@@ -1,15 +1,9 @@
+import HRModel from './hr-model.js';
 // HR record-level authorization. Never take a role, department or employee ID
 // from query parameters, browser state, or an editable app_users role field.
 const fault=(status,message)=>Object.assign(new Error(message),{status});
 export const nameKey=value=>typeof value==='string'?value.normalize('NFC').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' '):'';
-export function managementLevel(value){
-  if(!['string','number'].includes(typeof value))return null;
-  const key=String(value).trim().toUpperCase().replace(/[−–]/g,'-');
-  if(['0','-0','L-0'].includes(key))return 0;
-  if(['-1','L-1'].includes(key))return -1;
-  if(['-2','L-2'].includes(key))return -2;
-  return null;
-}
+export const {managementLevel}=HRModel;
 const isReference=card=>nameKey(card.unit.status)==='эталон';
 const isProtected=card=>nameKey(card.unit.position)==='начальник'&&nameKey(card.unit.team)==='управление';
 const newest=values=>values.filter(v=>typeof v==='string'&&Number.isFinite(Date.parse(v))).sort((a,b)=>Date.parse(b)-Date.parse(a))[0]??null;
@@ -58,7 +52,7 @@ export function authorizeHr(payload,account){
   });
   const references=cards.filter(isReference);
   return {schema_version:1,dataset:'hr',api_revision:1,source_form_id:405691,generated_at:payload.generated_at,
-    access:{policy_version:1,level:'L-'+Math.abs(level),scope:level===0?'all':level===-1?'department':'self',employee_task_id:own.unit.task_id,department:own.unit.team??null,can_export_kpi:level===0},
+    access:{policy_version:1,level:'L-'+Math.abs(level),scope:level===0?'all':level===-1?'department':'self',employee_task_id:own.unit.task_id,department:own.unit.team??null,can_export_kpi:level===0,can_manage_compensation:level===0,can_export_indexation:level===0},
     meta:{card_count:cards.length,employee_card_count:cards.length-references.length,reference_card_count:references.length,
       kpi_row_count:cards.reduce((n,c)=>n+c.kpi.length,0),ipr_row_count:cards.reduce((n,c)=>n+c.skills.length,0),
       last_source_update:newest(cards.map(c=>c.unit.last_modified_date)),last_database_update:newest(cards.map(c=>c.unit.loaded_at)),

@@ -10,7 +10,7 @@ FROM node:22-alpine
 RUN apk add --no-cache ca-certificates tini su-exec
 WORKDIR /app
 COPY --from=pocketbase /download/pocketbase /usr/local/bin/pocketbase
-COPY index.html errors.js stat.js hr.js hr.css server.mjs auth.mjs auth-client.js hr-access.mjs login.html login.js login.css start.mjs entrypoint.sh check-build.mjs check-access.mjs ./
+COPY hr-model.js compensation.js compensation-ui.js compensation-api.mjs compensation-store.mjs indexation-xlsx.mjs index.html errors.js stat.js hr.js hr.css server.mjs auth.mjs auth-client.js hr-access.mjs login.html login.js login.css start.mjs entrypoint.sh check-build.mjs check-access.mjs ./
 COPY pb_migrations ./pb_migrations
 COPY pb_hooks ./pb_hooks
 # KANBAN_ASSET_SHA256 90fd2c7bd88297dd9f58e927c987a5c350e40cbb81e303c8952eb7dadc5b6901

@@ -9,6 +9,7 @@ import {fileURLToPath} from 'node:url';
 import {createHash,randomUUID} from 'node:crypto';
 import {createAuth} from './auth.mjs';
 import {authorizeHr} from './hr-access.mjs';
+import {createCompensationApi,readCompensationBody} from './compensation-api.mjs';
 // One competency per request. No retained results, cooldown or shared pending calls.
 const WEBHOOK='https://n8n.ubait.ru/webhook/get_confluence_tree_storage_matrix';
 export const isCompetencyId=value=>typeof value==='string'&&/^03\.01\.(?:01|02)\.\d{2}\.\d{2}$/.test(value);
@@ -98,7 +99,7 @@ export function createCompetencyDocs({fetchImpl=fetch,now=Date.now,timeoutMs=600
   };
 }
 
-export const BUILD_VERSION='2026.11.13-v2.9.6';
+export const BUILD_VERSION='2026.11.13-v2.10.0';
 
 // Shared in-flight sync. Browsers poll this small status instead of holding an HTTP request open.
 export function createHrSync({webhookUrl,webhookSecret,fetchImpl=fetch,now=Date.now,invalidate=()=>{},timeoutMs=900000}){
@@ -229,7 +230,7 @@ export function createKpiExporter({webhookUrl,webhookSecret,fetchImpl=fetch,time
   };
 }
 export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_URL, fetchImpl=fetch, now=Date.now, cacheMs=15000,
-  webhookSecret=process.env.N8N_WEBHOOK_SECRET,origin=process.env.PUBLIC_ORIGIN,authOptions={}}={}) {
+  webhookSecret=process.env.N8N_WEBHOOK_SECRET,origin=process.env.PUBLIC_ORIGIN,authOptions={},compensationStore}={}) {
   const auth=createAuth({origin,...authOptions});
   const htmlPath=new URL('./index.html',import.meta.url);
   function channel(kind){
@@ -265,6 +266,7 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
    upstream.invalidate=()=>{generation++;cache=null;pending=null;};return upstream;
   }
   const upstream=channel('map'),hrUpstream=channel('hr');
+  const compensation=createCompensationApi({getScoped:async(user,fresh)=>{if(fresh)hrUpstream.invalidate();return authorizeHr(JSON.parse(await hrUpstream()),user);},store:compensationStore,now});
   const competencyDocs=createCompetencyDocs({fetchImpl,now});
   const skillHistory=createSkillHistoryReader({webhookUrl,webhookSecret,fetchImpl});
   const hrSync=createHrSync({webhookUrl,webhookSecret,fetchImpl,now,invalidate:()=>hrUpstream.invalidate()});
@@ -289,7 +291,8 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
       if(auth.isAdminRoute(url.pathname))return await auth.proxyAdmin(req,res,url);
       const syncPost=url.pathname==='/api/hr/sync'&&req.method==='POST';
       const kpiPost=url.pathname==='/api/hr/kpi-export'&&req.method==='POST';
-      if(!['GET','HEAD'].includes(req.method)&&!syncPost&&!kpiPost){res.setHeader('Allow','GET, HEAD');return json(405,{error:'Только GET.'});}
+      const compensationWrite=(url.pathname==='/api/hr/compensation-settings'&&req.method==='PUT')||(url.pathname==='/api/hr/indexation-export'&&req.method==='POST');
+      if(!['GET','HEAD'].includes(req.method)&&!syncPost&&!kpiPost&&!compensationWrite){res.setHeader('Allow','GET, HEAD');return json(405,{error:'Только GET.'});}
       if(['/login','/login.js','/login.css'].includes(url.pathname)){
         const name=url.pathname==='/login'?'login.html':url.pathname.slice(1);
         res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
@@ -302,6 +305,17 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
         return json(e.status||503,{error:e.status===401?'Войдите в систему.':'Сервис входа временно недоступен.'});
       }
       if(url.pathname==='/auth/me')return json(200,user);
+      if(['/api/hr/compensation-settings','/api/hr/indexation-export'].includes(url.pathname)){
+        res.setHeader('Vary','Cookie');
+        const settings=url.pathname.endsWith('/compensation-settings'),allowed=settings?['GET','PUT']:['POST'];
+        if(!allowed.includes(req.method)){res.setHeader('Allow',allowed.join(', '));return json(405,{error:'Метод не поддерживается.'});}
+        if(req.method!=='GET'&&(req.headers.origin!==new URL(origin).origin||req.headers['sec-fetch-site']==='cross-site'))return json(403,{error:'Запрос разрешён только со страницы сайта.'});
+        try{
+          if(settings)return json(200,req.method==='GET'?await compensation.settings(user):await compensation.save(user,await readCompensationBody(req)));
+          const result=await compensation.export(user,await readCompensationBody(req));
+          res.writeHead(200,{'Content-Type':KPI_XLSX,'Content-Disposition':`attachment; filename="${result.filename}"`,'Content-Length':result.body.length});return res.end(result.body);
+        }catch(error){return json(error.status||503,{error:error.status?error.message:'Не удалось выполнить операцию с моделью. Повторите позже.'});}
+      }
       if(url.pathname==='/api/hr/kpi-export'){
         res.setHeader('Vary','Cookie');
         if(!kpiPost){res.setHeader('Allow','POST');return json(405,{error:'Только POST.'});}
@@ -357,10 +371,10 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
         res.setHeader('Vary','Cookie');
         // The shared snapshot NEVER leaves the server. Reauthorize each response
         // for the freshly validated PocketBase identity, including cache hits.
-        const body=JSON.stringify(authorizeHr(JSON.parse(await hrUpstream()),user));
+        const body=JSON.stringify(await compensation.enrich(authorizeHr(JSON.parse(await hrUpstream()),user)));
         res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:body);
       }
-      if(['/errors.js','/stat.js','/kanban.js','/hr.js','/hr.css','/auth-client.js'].includes(url.pathname)){
+      if(['/errors.js','/stat.js','/kanban.js','/hr-model.js','/compensation.js','/compensation-ui.js','/hr.js','/hr.css','/auth-client.js'].includes(url.pathname)){
         const source=await readFile(new URL('.'+url.pathname,import.meta.url),'utf8');
         res.writeHead(200,{'Content-Type':url.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8'});return res.end(req.method==='HEAD'?undefined:source);
       }

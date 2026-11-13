@@ -1,4 +1,5 @@
 // One container, two supervised processes. Only Node's 8080 port is public.
+import {randomBytes} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {once} from 'node:events';
 import {createStoryMapServer} from './server.mjs';
@@ -13,6 +14,7 @@ await checkWebhookProtection(target.href);
 const binary='/usr/local/bin/pocketbase',args=['--dir=/data/pocketbase','--migrationsDir=/app/pb_migrations','--hooksDir=/app/pb_hooks','--automigrate=false'];
 const init=spawn(binary,['migrate','up',...args],{stdio:'inherit'});
 const [code]=await once(init,'exit');if(code!==0)throw new Error('PocketBase initialization failed. Check /data and initial administrator secrets.');
+process.env.UBAIT_INTERNAL_KEY=randomBytes(32).toString('hex');
 const pbEnv={...process.env};delete pbEnv.PB_ADMIN_PASSWORD;delete pbEnv.PB_ADMIN_EMAIL;
 delete pbEnv.N8N_WEBHOOK_SECRET;delete pbEnv.STORY_MAP_WEBHOOK_URL;
 delete process.env.PB_ADMIN_PASSWORD;delete process.env.PB_ADMIN_EMAIL;

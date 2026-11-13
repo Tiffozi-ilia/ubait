@@ -55,26 +55,9 @@ globalThis.UbaitHR=(()=>{
   const fmt=v=>num(v)===null?'—':new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(Number(v));
   const day=v=>/^\d{4}-\d\d-\d\d$/.test(v??'')?v.slice(8)+'.'+v.slice(5,7)+'.'+v.slice(0,4):'—';
   const yearNow=()=>new Intl.DateTimeFormat('en',{year:'numeric',timeZone:'Europe/Moscow'}).format(new Date());
-  const scale=['C −','C','C +','B −','B','B +','A −','A','A +'];
-  const gradeIndex=v=>{const s=String(v??'').trim().replace(/[АВС]/g,c=>({'А':'A','В':'B','С':'C'}[c])).replace(/[−–]/g,'-').replace(/\s+/g,'');return ['C-','C','C+','B-','B','B+','A-','A','A+'].indexOf(s);};
+  const {scale,gradeIndex,gradePoints,careerGrades,norm,definitions,scoreProfile,calculatedGrade}=globalThis.UbaitHRModel;
   const label=v=>gradeIndex(v)<0?'—':scale[gradeIndex(v)];
-  // Matrix supplied by the user: non-linear points, AS IS only.
-  const points=[.5,.75,1,1.5,1.75,2,2.5,2.75,3];
-  const gradePoints=v=>gradeIndex(v)<0?null:points[gradeIndex(v)];
-  const careerGrades=['Юнлинг','Падаван','Джедай','Магистр'];
-  const norm=v=>String(v??'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/\s+/g,' ');
-  const definitions={employee:[
-    {name:'Аналитическое мышление',icon:'◇',short:'Мышление',items:[['01.01','Решение проблем и принятие решений'],['01.02','Системное мышление'],['01.03','Визуальное мышление'],['01.04','Творческое мышление'],['01.06','Концептуальное мышление']]},
-    {name:'Предметная область',icon:'◎',short:'Знания',items:[['02.01','Знание отрасли'],['02.02','Внутренняя методология и стандарты'],['02.03','Знание организации'],['02.04','Знание решения']]},
-    {name:'Инструменты и технологии',icon:'⌘',short:'Инструменты',items:[['03.01','Инструментарий работы'],['03.02','Формализация требований'],['03.03','Инструменты методологий']]},
-    {name:'Поведенческие компетенции',icon:'✧',short:'Поведение',items:[['04.01','Этика'],['04.02','Личная ответственность'],['04.03','Обучение'],['04.04','Надёжность'],['04.05','Организованность и тайм-менеджмент'],['04.06','Адаптируемость']]},
-    {name:'Управленческие компетенции',icon:'⌁',short:'Лидерство',items:[['05.01','Фасилитация'],['05.02','Лидерство и влияние'],['05.03','Организация командной работы'],['05.04','Переговоры и разрешение конфликтов'],['05.05','Менторство']]}
-  ],boss:[
-    {name:'Административное управление',icon:'◇',short:'Управление',items:[['01.01','Управление ресурсами'],['01.02','Управление изменениями'],['01.03','Онбординг и адаптация'],['01.04','Эмоциональный интеллект']]},
-    {name:'Функциональное управление',icon:'✧',short:'Лидерство',items:[['02.01','Адвокат клиента'],['02.02','Капитан команды'],['02.03','Архитектор решений'],['02.04','Стратег и тактик'],['02.05','Чемпион по обучению'],['02.06','Проводник к успеху']]}
-  ]};
-  for(const [kind,groups]of Object.entries(definitions))for(const group of groups)group.items=group.items.map(([suffix,name])=>({code:(kind==='employee'?'03.01.01.':'03.01.02.')+suffix,name}));
-  const tabs={competencies:'Компетенции',kpi:'KPI',ipr:'ИПР',employee:'Сотрудник'};
+  const tabs={competencies:'Компетенции',kpi:'KPI',ipr:'ИПР',employee:'Сотрудник',playground:'Playgound'};
   const skillGroupIcons={"employee":["<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M12 18V5\"/><path d=\"M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4\"/><path d=\"M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5\"/><path d=\"M17.997 5.125a4 4 0 0 1 2.526 5.77\"/><path d=\"M18 18a4 4 0 0 0 2-7.464\"/><path d=\"M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517\"/><path d=\"M6 18a4 4 0 0 1-2-7.464\"/><path d=\"M6.003 5.125a4 4 0 0 0-2.526 5.77\"/></svg>","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M12 7v14\"/><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\"/></svg>","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z\"/></svg>","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M11 14h2a2 2 0 0 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16\"/><path d=\"m14.45 13.39 5.05-4.694C20.196 8 21 6.85 21 5.75a2.75 2.75 0 0 0-4.797-1.837.276.276 0 0 1-.406 0A2.75 2.75 0 0 0 11 5.75c0 1.2.802 2.248 1.5 2.946L16 11.95\"/><path d=\"m2 15 6 6\"/><path d=\"m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a1 1 0 0 0-2.75-2.91\"/></svg>","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M18 21a8 8 0 0 0-16 0\"/><circle cx=\"10\" cy=\"8\" r=\"5\"/><path d=\"M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3\"/></svg>"],"boss":["<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><rect x=\"16\" y=\"16\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"2\" y=\"16\" width=\"6\" height=\"6\" rx=\"1\"/><rect x=\"9\" y=\"2\" width=\"6\" height=\"6\" rx=\"1\"/><path d=\"M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3\"/><path d=\"M12 12V8\"/></svg>","<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z\"/></svg>"]};
   const allSkills=kind=>definitions[kind].flatMap(g=>g.items);
   const initials=name=>esc(String(name??'').trim().split(/\s+/).slice(0,2).map(x=>x[0]||'').join(''));
@@ -139,7 +122,8 @@ globalThis.UbaitHR=(()=>{
   const prose=(title,text)=>`<span class="hr-prose-title">${esc(title)}</span><p class="hr-prose">${esc(text||'Не заполнено')}</p>`;
   const salaryIcons={"show": "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></svg>", "hide": "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49\"/><path d=\"M14.084 14.158a3 3 0 0 1-4.242-4.242\"/><path d=\"M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143\"/><path d=\"m2 2 20 20\"/></svg>"};
   const salaryControl=()=>'<span class="hr-salary"><span id="hr-salary-value" class="hr-salary-value" aria-live="polite" aria-label="Оклад скрыт">••••••</span><button id="hr-salary-toggle" class="hr-salary-toggle" type="button" data-hr-salary="true" aria-controls="hr-salary-value" aria-pressed="false" aria-label="Показать оклад" title="Показать оклад">'+salaryIcons.show+'</button></span>';
-  const detailsRows=(rows,{hideSalary=false}={})=>`<dl class="hr-data-list">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${hideSalary&&k==='Оклад'?salaryControl():esc(v??'—')}</dd>`).join('')}</dl>`;
+  const fairControl=compensation=>compensation?.fair_cost!==null&&compensation?.fair_cost!==undefined?'<span class="hr-salary"><span id="hr-fair-value" class="hr-salary-value" aria-live="polite" aria-label="Справедливая стоимость скрыта">••••••</span><button id="hr-fair-toggle" class="hr-salary-toggle" type="button" data-hr-fair="true" aria-controls="hr-fair-value" aria-pressed="false" aria-label="Показать справедливую стоимость" title="Показать справедливую стоимость">'+salaryIcons.show+'</button></span>':'<span class="hr-source">'+esc(compensation?.reason||'Модель не настроена')+'</span>';
+  const detailsRows=(rows,{hideSalary=false,compensation=null}={})=>`<dl class="hr-data-list">${rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${hideSalary&&k==='Оклад'?salaryControl():k==='Справедливая стоимость'?fairControl(compensation):esc(v??'—')}</dd>`).join('')}</dl>`;
   const fileList=files=>Array.isArray(files)&&files.length?files.map(f=>`<span class="hr-file">▧ ${esc(f?.name||f?.filename||'Вложение')}</span>`).join('')+'<span class="hr-source">Открыть вложения можно в карточке Pyrus по ссылке в шапке.</span>':'<span class="hr-source">Нет вложений</span>';
   const levelBar=s=>`<div class="hr-levels" aria-hidden="true">${scale.map((_,i)=>`<i class="${i<=gradeIndex(s.current)?'filled ':''}${i===gradeIndex(s.reference)?'reference ':''}${i===gradeIndex(s.target)?'target':''}"></i>`).join('')}</div>`;
   // A small, deliberately HTML-free Markdown renderer for reference text.
@@ -302,29 +286,6 @@ globalThis.UbaitHR=(()=>{
     const benchmark='<aside class="hr-card hr-benchmark hr-radar-panel"><div class="hr-benchmark-controls"><span class="hr-kicker">Сравнить с эталоном</span><div class="hr-grade-choices" role="group" aria-label="Эталон грейда">'+(refs.length?refs.map(r=>'<button data-hr-reference="'+esc(r.unit.task_id)+'" aria-pressed="'+(state.reference===r.unit.task_id)+'">'+esc(referenceLabel(r,data))+'</button>').join(''):'<p>Эталоны не найдены</p>')+'</div></div>'+radar(groups,state.kind)+'</aside>';
     return '<div class="hr-competency-page"><div class="hr-panel-top"><div class="hr-switch" role="group" aria-label="Набор компетенций">'+[['employee','Сотрудник'],['boss','Руководитель']].map(([k,t])=>'<button data-hr-kind="'+k+'" aria-pressed="'+(state.kind===k)+'">'+t+'</button>').join('')+'</div></div>'+developmentSummary(person,data,state.kind)+groupTabs+'<div class="hr-competency-layout">'+benchmark+'<div class="hr-group-content">'+groupPanel+'<div class="hr-skill-legend"><span><i class="hr-key"></i>AS IS</span><span><i class="hr-key target"></i>План</span><span><i class="hr-key reference"></i>Эталон</span></div></div></div></div>';
   }
-  function scoreProfile(person,kind){
-    const record=person?.['skills_'+kind]??{},values=allSkills(kind).map(s=>gradePoints(record[s.code+'_current']));
-    const assessed=values.filter(v=>v!==null),complete=assessed.length===values.length;
-    const subtotal=assessed.reduce((s,v)=>s+v,0),stored=num(record['score_sum_asis_'+kind]);
-    return {total:complete?subtotal:null,subtotal,assessed:assessed.length,count:values.length,stored,mismatch:complete&&stored!==null&&Math.abs(stored-subtotal)>.005};
-  }
-  function calculatedGrade(person,data,kind='employee'){
-    const current=scoreProfile(person,kind);
-    const bands=careerGrades.map(grade=>{
-      const matches=(data?.references??[]).filter(r=>r.unit.status==='Эталон'&&norm(r.unit.grade)===norm(grade));
-      const card=matches.length===1?matches[0]:null;
-      return {grade,card,count:matches.length,score:scoreProfile(card,kind)};
-    });
-    const result={current,bands,grade:'',label:'Не определён',baseline:null,next:null,status:'incomplete',reason:'Оценено '+current.assessed+' из '+current.count};
-    if(current.total===null)return result;
-    const unavailable=bands.find(b=>b.count!==1||b.score.total===null);
-    if(unavailable)return {...result,status:'references',reason:unavailable.count>1?'Несколько эталонов: '+unavailable.grade:!unavailable.count?'Нет эталона: '+unavailable.grade:'Не заполнен эталон: '+unavailable.grade};
-    // Recalculate from AS IS, not the stored unit.grade or planned ratings.
-    // Gaps are shown against the calculated grade; they do not lower the grade by points.
-    const at=bands.reduce((best,b,i)=>current.total>=b.score.total?i:best,-1);
-    if(at<0)return {...result,status:'below',label:'Ниже Юнлинга',reason:'Порог Юнлинга не достигнут',next:bands[0]};
-    return {...result,status:'calculated',grade:bands[at].grade,label:bands[at].grade,reason:'',baseline:bands[at],next:bands[at+1]??null};
-  }
   function development(person,data,kind){
     const calculated=calculatedGrade(person,data,kind),{current,grade}=calculated;
     const baseline=calculated.baseline??{card:null,count:0},nextGrade=calculated.next?.grade||'',next=calculated.next??{card:null,count:0};
@@ -393,7 +354,7 @@ globalThis.UbaitHR=(()=>{
   }
   function employee(person,data,kind='employee'){
     const u={...person.unit,grade:calculatedGrade(person,data,kind).label},c=person.check;
-    return `<div class="hr-profile-grid"><section class="hr-card"><h3>Работа и команда</h3>${detailsRows([['Сотрудник',u.staff],['Статус',u.status],['Отдел · team',u.team],['Руководитель',u.chief],['Почта руководителя',u.chief_email],['Должность',u.position],['Грейд',u.grade],['Уровень управления',u.level],['Стримы',u.stream.join(' · ')],['Бизнес-опыт, лет',u.business_stage]])}</section><section class="hr-card"><h3>Контакты и рабочее место</h3>${detailsRows([['Почта',u.staff_email],['Телефон',u.phone],['Город',u.city],['Бизнес-центр',u.center],['Рабочее место',u.place],['День рождения',day(u.birthday)],['Фото',u.photo.length?'См. вложения ниже':'Нет вложения']])}${fileList(u.photo)}</section><section class="hr-card"><h3>Условия</h3>${detailsRows([['Оклад',null],['Ожидания',fmt(u.expectations)],['Аура · исходное значение',u.aura],['Экспорт в BI',u.export_bi===null?'Не указано':u.export_bi?'Да':'Нет']],{hideSalary:true})}<span class="hr-prose-title">Оффер</span>${fileList(u.offer)}<p class="hr-source" style="margin-top:12px">Исходные значения из штатки. Валюта, период и состав выплат не выводятся из числа автоматически.</p></section><section class="hr-card"><h3>Даты и характеристика</h3><div class="hr-timeline">${[['Приём',u.date_in],['Перевод',u.date_transfer],['Увольнение',u.date_out]].map(([k,v])=>`<div><small>${k}</small><strong>${day(v)}</strong></div>`).join('')}</div>${prose('Характеристика',u.characteristic)}</section><section class="hr-card wide"><div class="hr-panel-top"><h3>Испытательный срок</h3>${pill('Окончание · '+day(c.check_end_date),u.status==='Испытательный срок'?'accent':'')}</div><p class="hr-prose">${esc(c.check_task||'Задача на испытательный срок не заполнена')}</p><div class="hr-check-grid">${[['Удалось',c.check_result_done],['Не удалось',c.check_result_fail],['Помогало',c.check_result_assist],['Мешало',c.check_result_disturb]].map(([k,v])=>`<div>${prose(k,v)}</div>`).join('')}</div>${prose('Обратная связь',c.check_feedback)}</section></div>`;
+    return `<div class="hr-profile-grid"><section class="hr-card"><h3>Работа и команда</h3>${detailsRows([['Сотрудник',u.staff],['Статус',u.status],['Отдел · team',u.team],['Руководитель',u.chief],['Почта руководителя',u.chief_email],['Должность',u.position],['Грейд',u.grade],['Уровень управления',u.level],['Стримы',u.stream.join(' · ')],['Бизнес-опыт, лет',u.business_stage]])}</section><section class="hr-card"><h3>Контакты и рабочее место</h3>${detailsRows([['Почта',u.staff_email],['Телефон',u.phone],['Город',u.city],['Бизнес-центр',u.center],['Рабочее место',u.place],['День рождения',day(u.birthday)],['Фото',u.photo.length?'См. вложения ниже':'Нет вложения']])}${fileList(u.photo)}</section><section class="hr-card"><h3>Условия</h3>${detailsRows([['Оклад',null],['Справедливая стоимость',null],['Ожидания',fmt(u.expectations)],['Аура · исходное значение',u.aura],['Экспорт в BI',u.export_bi===null?'Не указано':u.export_bi?'Да':'Нет']],{hideSalary:true,compensation:person.compensation})}<span class="hr-prose-title">Оффер</span>${fileList(u.offer)}<p class="hr-source" style="margin-top:12px">Исходные значения из штатки. Валюта, период и состав выплат не выводятся из числа автоматически.</p></section><section class="hr-card"><h3>Даты и характеристика</h3><div class="hr-timeline">${[['Приём',u.date_in],['Перевод',u.date_transfer],['Увольнение',u.date_out]].map(([k,v])=>`<div><small>${k}</small><strong>${day(v)}</strong></div>`).join('')}</div>${prose('Характеристика',u.characteristic)}</section><section class="hr-card wide"><div class="hr-panel-top"><h3>Испытательный срок</h3>${pill('Окончание · '+day(c.check_end_date),u.status==='Испытательный срок'?'accent':'')}</div><p class="hr-prose">${esc(c.check_task||'Задача на испытательный срок не заполнена')}</p><div class="hr-check-grid">${[['Удалось',c.check_result_done],['Не удалось',c.check_result_fail],['Помогало',c.check_result_assist],['Мешало',c.check_result_disturb]].map(([k,v])=>`<div>${prose(k,v)}</div>`).join('')}</div>${prose('Обратная связь',c.check_feedback)}</section></div>`;
   }
   function createSyncClient({fetchImpl=(...args)=>fetch(...args),onState=()=>{},onComplete=()=>{},onDenied=()=>{},schedule=setTimeout,cancel=clearTimeout}={}){
     let state={status:'idle'},pending=false,timer=null,completedId=null;
@@ -477,6 +438,29 @@ globalThis.UbaitHR=(()=>{
         if(e.status===401||e.status===403)void load({silent:true});
       }finally{clearTimeout(timer);payrollController=null;payroll.busy=false;paintPayroll();}
     }
+    const compUI=globalThis.UbaitCompensationUI.create({root,onSaved:()=>load({silent:true}),onDenied:()=>void load({silent:true}),notify:()=>{if(state.tab==='playground')render();}});
+    const indexation={open:false,busy:false,message:'',error:false};let indexationController=null;
+    function indexationDialog(){return '<dialog id="hr-indexation-dialog" class="hr-dialog hr-payroll-dialog" aria-labelledby="hr-indexation-title"><div class="dialog-top"><h2 id="hr-indexation-title">Реестр на индексацию</h2><button class="action" data-hr-indexation-close="true">Закрыть</button></div><div class="detail-body"><p class="hr-payroll-scope">Все доступные вам сотрудники со статусом «Работает». Текущие данные и сохранённая модель на момент формирования.</p><div id="hr-indexation-progress" class="hr-payroll-progress" role="status" hidden><progress aria-label="Формирование Excel"></progress><span>Формируем Excel…</span></div><p id="hr-indexation-message" class="hr-payroll-message" role="status" hidden></p><div class="hr-payroll-footer"><button class="action" data-hr-indexation-close="true">Отмена</button><button class="action primary" data-hr-indexation-submit="true">Сформировать Excel</button></div></div></dialog>';}
+    function paintIndexation(){
+      const progress=root.querySelector('#hr-indexation-progress'),message=root.querySelector('#hr-indexation-message');
+      if(progress)progress.hidden=!indexation.busy;if(message){message.textContent=indexation.message;message.hidden=!indexation.message;message.setAttribute('role',indexation.error?'alert':'status');}
+      root.querySelectorAll('[data-hr-indexation-submit]').forEach(b=>b.disabled=indexation.busy);
+    }
+    async function generateIndexation(){
+      if(indexation.busy||data?.access?.can_export_indexation!==true)return;indexation.busy=true;indexation.message='';indexation.error=false;paintIndexation();
+      const controller=new AbortController();indexationController=controller;let timedOut=false;const timer=setTimeout(()=>{timedOut=true;controller.abort();},70000);
+      try{
+        const response=await fetch('/api/hr/indexation-export',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',body:'{}',signal:controller.signal});
+        if(globalThis.UbaitAuth)await UbaitAuth.checked(response);
+        if(!response.ok){const body=await response.json();throw Object.assign(new Error(body.error||'Не удалось сформировать реестр.'),{status:response.status});}
+        if(!(response.headers.get('content-type')||'').startsWith('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'))throw new Error('Сервис вернул другой формат файла.');
+        const blob=await response.blob();if(controller.signal.aborted)return;if(!blob.size)throw new Error('Получен пустой файл.');
+        const filename=response.headers.get('content-disposition')?.match(/filename="(UBAIT_Indexation_[a-zA-Z0-9_.-]+\.xlsx)"/)?.[1]||'UBAIT_Indexation.xlsx';
+        const address=URL.createObjectURL(blob),link=document.createElement('a');link.href=address;link.download=filename;link.hidden=true;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(address),60000);
+        indexation.message='Реестр готов. Скачивание началось.';
+      }catch(e){if(timedOut||!controller.signal.aborted){indexation.error=true;indexation.message=timedOut?'Формирование заняло больше минуты. Повторите позже.':e.message;}if([401,403].includes(e.status))void load({silent:true});}
+      finally{clearTimeout(timer);indexationController=null;indexation.busy=false;paintIndexation();}
+    }
     const loadDocs=createDocsLoader(),loadHistory=createHistoryLoader();
     let openedSkill=null,historyController=null;
     const cancelHistory=()=>{historyController?.abort();historyController=null;openedSkill=null;};
@@ -490,18 +474,20 @@ globalThis.UbaitHR=(()=>{
     }
     const state={tab:Object.hasOwn(tabs,root.dataset.hrSelectedTab)?root.dataset.hrSelectedTab:'competencies',person:'',query:'',department:'',status:'',kind:'employee',skillGroups:{employee:0,boss:0},reference:'',referenceManual:false,year:yearNow(),horizon:'',goalQuery:'',iprQuery:''};
     const navigation=globalThis.document?.getElementById('hr-navigation');
-    tabSetters.set(root,key=>{if(state.tab!==key){state.tab=key;render('hr-'+key+'-tab');}});
+    tabSetters.set(root,key=>{if(key==='playground'&&data?.access?.can_manage_compensation!==true)return;if(state.tab!==key){state.tab=key;render('hr-'+key+'-tab');}});
     const person=()=>data?.people.find(p=>p.unit.task_id===state.person);
     const filtered=()=>data.people.filter(p=>(!state.department||p.unit.team===state.department)&&(!state.status||p.unit.status===state.status)&&(!state.query||[title(p),p.unit.position,p.unit.team,p.unit.task_id].join(' ').toLocaleLowerCase('ru').includes(state.query.toLocaleLowerCase('ru'))));
     const spinner=()=>'<div class="hr-empty hr-loading" role="status"><span class="hr-spinner" aria-hidden="true"></span><h3>Загружаем штатные данные</h3><p>Сотрудники, компетенции, KPI и ИПР из БД</p></div>';
     function render(focusId,selection){
       cancelHistory();
+      compUI.access(data?.access?.can_manage_compensation===true);
+      if(state.tab==='playground'&&data?.access?.can_manage_compensation!==true)state.tab='employee';
       root.dataset.hrSelectedTab=state.tab;
-      navigation?.querySelectorAll('[data-hr-tab]').forEach(button=>{const active=button.dataset.hrTab===state.tab;button.setAttribute('aria-selected',String(active));button.setAttribute('tabindex',active?'0':'-1');});
+      navigation?.querySelectorAll('[data-hr-tab]').forEach(button=>{button.hidden=button.dataset.hrTab==='playground'&&data?.access?.can_manage_compensation!==true;const active=button.dataset.hrTab===state.tab;button.setAttribute('aria-selected',String(active));button.setAttribute('tabindex',active?'0':'-1');});
       const accessLabel=data?.access?data.access.level+' · '+({self:'Мой профиль',department:'Мой отдел',all:'Все доступные сотрудники'}[data.access.scope]||'HR'):'';
-      const nav=(navigation?'<div class="hr-subnav" role="group" aria-label="Обновление HR">':'<nav class="hr-subnav" role="tablist" aria-label="Разделы HR">'+Object.entries(tabs).map(([k,t])=>'<button id="hr-'+k+'-tab" role="tab" data-hr-tab="'+k+'" aria-selected="'+(state.tab===k)+'" tabindex="'+(state.tab===k?'0':'-1')+'" aria-controls="hr-tab-content">'+t+'</button>').join(''))+(state.tab==='kpi'&&data?.access?.can_export_kpi===true?'<button id="hr-payroll-open" class="hr-payroll-trigger" data-hr-payroll-open="true">Сформировать реестр на выплату</button>':'')+'<span class="hr-live" title="'+esc(accessLabel?accessLabel+' · Срез '+timestamp(data.generated_at):'Источник: штатный реестр 405691')+'">'+esc(accessLabel||'Штатка · БД')+'</span><button id="hr-push-sync" class="hr-push-sync" data-hr-sync="true" title="Загрузить изменения из Pyrus в БД и сохранить историю оценок">Синхронизировать</button><button class="hr-refresh" data-hr-refresh="true" '+(loading?'disabled':'')+' aria-label="Перечитать HR из БД" title="Перечитать данные и права доступа из БД" >↻</button>'+(navigation?'</div>':'</nav>')+'<div id="hr-sync-state" class="hr-sync-state" role="status" aria-live="polite" hidden></div>';
+      const nav=(navigation?'<div class="hr-subnav" role="group" aria-label="Обновление HR">':'<nav class="hr-subnav" role="tablist" aria-label="Разделы HR">'+Object.entries(tabs).filter(([k])=>k!=='playground'||data?.access?.can_manage_compensation===true).map(([k,t])=>'<button id="hr-'+k+'-tab" role="tab" data-hr-tab="'+k+'" aria-selected="'+(state.tab===k)+'" tabindex="'+(state.tab===k?'0':'-1')+'" aria-controls="hr-tab-content">'+t+'</button>').join(''))+(state.tab==='kpi'&&data?.access?.can_export_kpi===true?'<button id="hr-payroll-open" class="hr-payroll-trigger" data-hr-payroll-open="true">Сформировать реестр на выплату</button>':'')+(state.tab==='ipr'&&data?.access?.can_export_indexation===true?'<button id="hr-indexation-open" class="hr-payroll-trigger" data-hr-indexation-open="true">Сформировать реестр на индексацию</button>':'')+'<span class="hr-live" title="'+esc(accessLabel?accessLabel+' · Срез '+timestamp(data.generated_at):'Источник: штатный реестр 405691')+'">'+esc(accessLabel||'Штатка · БД')+'</span><button id="hr-push-sync" class="hr-push-sync" data-hr-sync="true" title="Загрузить изменения из Pyrus в БД и сохранить историю оценок">Синхронизировать</button><button class="hr-refresh" data-hr-refresh="true" '+(loading?'disabled':'')+' aria-label="Перечитать HR из БД" title="Перечитать данные и права доступа из БД" >↻</button>'+(navigation?'</div>':'</nav>')+'<div id="hr-sync-state" class="hr-sync-state" role="status" aria-live="polite" hidden></div>';
       if(!data){
-        payroll.open=false;payrollController?.abort();
+        payroll.open=false;payrollController?.abort();indexation.open=false;indexationController?.abort();
         root.innerHTML=nav+(loading?spinner():'<div class="hr-empty" role="alert"><h3>'+(denied?'Доступ к HR не настроен':'HR не подключён')+'</h3><p>'+esc(error||'Нет ответа от HR API.')+'</p><button class="action" data-hr-refresh="true">Повторить загрузку</button></div>');
         paintSync();return;
       }
@@ -512,17 +498,20 @@ globalThis.UbaitHR=(()=>{
       const departments=[...new Set(data.people.map(p=>p.unit.team).filter(Boolean))].sort(),statuses=[...new Set(data.people.map(p=>p.unit.status).filter(Boolean))].sort();
       const missing=p?.missing_blocks?.length?'<div class="hr-note">В БД не найдены блоки этой карточки: '+esc(p.missing_blocks.join(', '))+'. Поля этих блоков показаны пустыми. Проверь загрузку штатки.</div>':'';
       const same=p?.same_person_cards>1?'<div class="hr-note">У этого человека '+p.same_person_cards+' карточки в штатке. Сейчас открыта #'+esc(p.unit.task_id)+'; данные разных карточек не объединяются.</div>':'';
-      root.innerHTML=nav+
+      root.innerHTML=nav+(state.tab==='playground'?'<section id="hr-tab-content" class="hr-content comp-workspace" role="tabpanel" aria-labelledby="hr-playground-tab">'+compUI.render()+'</section>':
         '<div class="hr-layout"><aside class="hr-directory" aria-label="Выбор сотрудника"><div class="hr-directory-top"><div class="hr-directory-label"><span>Карточки</span><span>'+people.length+' / '+data.people.length+'</span></div><input id="hr-person-search" type="search" class="hr-search" placeholder="ФИО или ID…" aria-label="Найти сотрудника" value="'+esc(state.query)+'">'+select('department','Отдел',departments,state.department,true)+select('status','Статус',statuses,state.status,true)+'</div><div class="hr-directory-list">'+(people.map(p=>'<button class="hr-person" data-hr-person="'+esc(p.unit.task_id)+'" aria-pressed="'+(state.person===p.unit.task_id)+'"><span class="hr-avatar" aria-hidden="true">'+initials(p.unit.staff||p.unit.status)+'</span><span><strong>'+esc(title(p))+'</strong><small>'+esc([p.unit.team,calculatedGrade(p,data,state.kind).label].filter(Boolean).join(' · '))+'</small><small>'+esc(p.unit.status||'Без статуса')+' · #'+esc(p.unit.task_id)+'</small></span></button>').join('')||'<p class="hr-source">Нет совпадений</p>')+'</div><footer class="hr-directory-footer">'+data.references.length+' эталонов<br>Изменено в Pyrus: '+esc(timestamp(data.meta.last_source_update))+'</footer></aside><div class="hr-detail">'+
         (p?'<header class="hr-identity"><span class="hr-avatar" aria-hidden="true">'+initials(p.unit.staff||p.unit.status)+'</span><div><h2>'+esc(title(p))+'</h2><p>'+esc([p.unit.position,p.unit.team].filter(Boolean).join(' · '))+' · <a href="https://pyrus.sovcombank.ru/t#id'+p.unit.task_id+'" target="_blank" rel="noopener noreferrer">#'+p.unit.task_id+' ↗</a></p></div><div class="hr-identity-tags">'+pill(calculatedGrade(p,data,state.kind).label,'accent')+pill(p.unit.status||'Без статуса')+'</div></header>':'')+
         '<section id="hr-tab-content" class="hr-content" role="tabpanel" aria-labelledby="hr-'+state.tab+'-tab">'+
         (!p?'<div class="hr-empty"><h3>Сотрудник не выбран</h3><p>Измени поиск или фильтры отдела и статуса. В списке только доступные тебе карточки.</p></div>':missing+same+(state.tab==='competencies'?competencies(p,data,state):state.tab==='kpi'?kpi(p,state):state.tab==='ipr'?ipr(p,state):employee(p,data,state.kind)))+
-        '</section></div></div><dialog id="hr-skill-dialog" class="hr-dialog" aria-labelledby="hr-skill-title"><div class="dialog-top"><span class="hr-source" id="hr-dialog-label">Профиль навыка</span><button class="action" data-hr-close="true">Закрыть</button></div><div class="detail-body" id="hr-skill-body"></div></dialog>'+(data.access?.can_export_kpi===true?payrollDialog():'');
+        '</section></div></div>')+'<dialog id="hr-skill-dialog" class="hr-dialog" aria-labelledby="hr-skill-title"><div class="dialog-top"><span class="hr-source" id="hr-dialog-label">Профиль навыка</span><button class="action" data-hr-close="true">Закрыть</button></div><div class="detail-body" id="hr-skill-body"></div></dialog>'+(data.access?.can_export_kpi===true?payrollDialog():'')+(data.access?.can_export_indexation===true?indexationDialog():'');
       root.querySelector('#hr-skill-dialog')?.addEventListener?.('close',cancelHistory);
       paintSync();
       const payrollModal=root.querySelector('#hr-payroll-dialog');
       if(payrollModal){payrollModal.addEventListener('cancel',()=>{payroll.open=false;payrollController?.abort();});if(payroll.open)payrollModal.showModal();paintPayroll();}
       else{payroll.open=false;payrollController?.abort();}
+      const indexModal=root.querySelector('#hr-indexation-dialog');
+      if(indexModal){indexModal.addEventListener('cancel',()=>{indexation.open=false;indexationController?.abort();});if(indexation.open)indexModal.showModal();paintIndexation();}else{indexation.open=false;indexationController?.abort();}
+      if(state.tab==='playground'&&!compUI.loaded())void compUI.refresh();
       if(focusId){const el=root.querySelector('#'+focusId)||navigation?.querySelector('#'+focusId);el?.focus({preventScroll:true});if(selection&&el?.setSelectionRange)el.setSelectionRange(...selection);}
     }
     function load(options={}){
@@ -552,7 +541,7 @@ globalThis.UbaitHR=(()=>{
         }
         if(state.reference&&!data.references.some(r=>r.unit.task_id===state.reference)){state.reference='';state.referenceManual=false;}
       }catch(e){data=null;lastContent='';state.person='';state.reference='';error=e.name==='AbortError'?'HR не ответил за 70 секунд. Проверь выполнение флоу HR в n8n.':e.message;}
-      finally{clearTimeout(timer);loading=false;if(!background||changed||error)render();else paintSync();}
+      finally{clearTimeout(timer);loading=false;if(!background||changed||error)render();else paintSync();if(data?.access?.can_manage_compensation===true)void compUI.refresh();}
     }
     function skillDialog(code){
       const p=person(),skill=skillProfile(p,data,state.kind,code);if(!skill)return;
@@ -601,6 +590,11 @@ globalThis.UbaitHR=(()=>{
       const button=e.target.closest('button'),d=button?.dataset;if(!d)return;
       if(d.hrRefresh){void load();return;}
       if(!data)return;
+      if(compUI.click(button))return;
+      if(d.hrIndexationOpen&&data.access?.can_export_indexation===true){indexation.open=true;indexation.message='';indexation.error=false;paintIndexation();root.querySelector('#hr-indexation-dialog')?.showModal();return;}
+      if(d.hrIndexationClose){indexation.open=false;indexationController?.abort();root.querySelector('#hr-indexation-dialog')?.close();return;}
+      if(d.hrIndexationSubmit){void generateIndexation();return;}
+      if(d.hrFair){const p=person(),value=root.querySelector('#hr-fair-value');if(!p||!value)return;const visible=button.getAttribute('aria-pressed')!=='true';value.textContent=visible?fmt(p.compensation?.fair_cost):'••••••';value.setAttribute('aria-label',visible?'Справедливая стоимость':'Справедливая стоимость скрыта');button.setAttribute('aria-pressed',String(visible));button.setAttribute('aria-label',visible?'Скрыть справедливую стоимость':'Показать справедливую стоимость');button.title=visible?'Скрыть справедливую стоимость':'Показать справедливую стоимость';button.innerHTML=salaryIcons[visible?'hide':'show'];return;}
       if(d.hrPayrollClose){closePayroll();return;}
       if(d.hrPayrollOpen&&data.access?.can_export_kpi===true){if(!payroll.busy){Object.assign(payroll,lastCompletedQuarter(),{message:'',error:false});const input=root.querySelector('#hr-payroll-year');if(input)input.value=payroll.year;}payroll.open=true;paintPayroll();root.querySelector('#hr-payroll-dialog')?.showModal();return;}
       if(d.hrPayrollQuarter&&!payroll.busy){const q=Number(d.hrPayrollQuarter);if(q>=1&&q<=4)payroll.quarter=q;paintPayroll();return;}
@@ -620,21 +614,22 @@ globalThis.UbaitHR=(()=>{
       if(d.hrSkill){skillDialog(d.hrSkill,d.hrSkillReference);return;}
       if(d.hrGroup!==undefined){selectSkillGroup(Number(d.hrGroup));return;}
       if(d.hrOpenIpr){state.tab='ipr';state.iprQuery=d.hrOpenIpr;render('hr-ipr-tab');return;}
-      if(d.hrTab&&Object.hasOwn(tabs,d.hrTab)){state.tab=d.hrTab;render('hr-'+d.hrTab+'-tab');return;}
+      if(d.hrTab&&Object.hasOwn(tabs,d.hrTab)&&(d.hrTab!=='playground'||data.access?.can_manage_compensation===true)){state.tab=d.hrTab;render('hr-'+d.hrTab+'-tab');return;}
       if(d.hrPerson&&data.people.some(p=>p.unit.task_id===d.hrPerson)){state.person=d.hrPerson;state.referenceManual=false;state.goalQuery='';state.iprQuery='';state.horizon='';render();return;}
       if(d.hrKind&&definitions[d.hrKind]){state.kind=d.hrKind;state.referenceManual=false;}
       else if(d.hrReference&&data.references.some(r=>r.unit.task_id===d.hrReference)){state.reference=d.hrReference;state.referenceManual=true;}
       else if(d.hrFilter&&['year','horizon','department','status'].includes(d.hrFilter)){state[d.hrFilter]=d.value??'';if(d.hrFilter==='year')state.horizon='';}
       else return;render();
     });
-    root.addEventListener('input',e=>{if(!data)return;if(e.target.id==='hr-payroll-year'){payroll.year=e.target.value;return;}const keys={'hr-person-search':'query','hr-goal-search':'goalQuery','hr-ipr-search':'iprQuery'},key=keys[e.target.id];if(!key)return;state[key]=e.target.value;render(e.target.id,[e.target.selectionStart,e.target.selectionEnd]);});
-    root.addEventListener('keydown',e=>{if(!data)return;const groupTab=e.target.closest('[data-hr-group]');if(groupTab){const count=definitions[state.kind].length,index=Number(groupTab.dataset.hrGroup);let next;if(e.key==='ArrowRight')next=(index+1)%count;if(e.key==='ArrowLeft')next=(index+count-1)%count;if(e.key==='Home')next=0;if(e.key==='End')next=count-1;if(next!==undefined){e.preventDefault();selectSkillGroup(next);}return;}const skillTab=e.target.closest('[data-hr-skill-tab]');if(skillTab){let next;if(e.key==='Home')next='description';if(e.key==='End')next='history';if(['ArrowLeft','ArrowRight'].includes(e.key))next=skillTab.dataset.hrSkillTab==='description'?'history':'description';if(next){e.preventDefault();selectSkillTab(next,true);}return;}const tab=e.target.closest('[data-hr-tab]');if(!tab)return;const keys=Object.keys(tabs),index=keys.indexOf(state.tab);let next;if(e.key==='ArrowRight')next=keys[(index+1)%keys.length];if(e.key==='ArrowLeft')next=keys[(index+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();state.tab=next;render('hr-'+next+'-tab');}});
+    root.addEventListener('input',e=>{if(!data)return;if(compUI.input(e.target))return;if(e.target.id==='hr-payroll-year'){payroll.year=e.target.value;return;}const keys={'hr-person-search':'query','hr-goal-search':'goalQuery','hr-ipr-search':'iprQuery'},key=keys[e.target.id];if(!key)return;state[key]=e.target.value;render(e.target.id,[e.target.selectionStart,e.target.selectionEnd]);});
+    root.addEventListener('keydown',e=>{if(!data)return;const groupTab=e.target.closest('[data-hr-group]');if(groupTab){const count=definitions[state.kind].length,index=Number(groupTab.dataset.hrGroup);let next;if(e.key==='ArrowRight')next=(index+1)%count;if(e.key==='ArrowLeft')next=(index+count-1)%count;if(e.key==='Home')next=0;if(e.key==='End')next=count-1;if(next!==undefined){e.preventDefault();selectSkillGroup(next);}return;}const skillTab=e.target.closest('[data-hr-skill-tab]');if(skillTab){let next;if(e.key==='Home')next='description';if(e.key==='End')next='history';if(['ArrowLeft','ArrowRight'].includes(e.key))next=skillTab.dataset.hrSkillTab==='description'?'history':'description';if(next){e.preventDefault();selectSkillTab(next,true);}return;}const tab=e.target.closest('[data-hr-tab]');if(!tab)return;const keys=Object.keys(tabs).filter(k=>k!=='playground'||data.access?.can_manage_compensation===true),index=keys.indexOf(state.tab);let next;if(e.key==='ArrowRight')next=keys[(index+1)%keys.length];if(e.key==='ArrowLeft')next=keys[(index+keys.length-1)%keys.length];if(e.key==='Home')next=keys[0];if(e.key==='End')next=keys.at(-1);if(next){e.preventDefault();state.tab=next;render('hr-'+next+'-tab');}});
     reloaders.set(root,async()=>{await load();if(data)void sync.check(true);});
     // Recheck permissions when opening HR, returning to the page and every minute
     // while visible. Failed checks clear the previously displayed personnel data.
     if(globalThis.document&&typeof setInterval==='function'){
       const refreshVisible=()=>{if(!document.hidden&&!root.hidden){void load({silent:true});if(data)void sync.check(true);}};
       document.addEventListener('visibilitychange',refreshVisible);
+      globalThis.addEventListener?.('focus',refreshVisible);
       globalThis.addEventListener?.('pageshow',e=>{if(e.persisted)refreshVisible();});
       setInterval(refreshVisible,60000);
     }
