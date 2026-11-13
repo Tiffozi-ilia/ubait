@@ -2,7 +2,7 @@
 (function(root){
 'use strict';
 const M=typeof module!=='undefined'&&module.exports?require('./hr-model.js'):root.UbaitHRModel;
-const formulaVersion='piecewise-score-v1';
+const formulaVersion='grade-step-score-v2';
 const defaultModel=()=>({management_base_multiplier:null,growth:{employee:[1,1,1],boss:[1,1,1]}});
 const number=v=>typeof v==='number'?Number.isFinite(v)?v:null:typeof v==='string'&&v.trim()!==''&&/^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:e[+-]?\d+)?$/i.test(v.trim())?Number.isFinite(Number(v.trim().replace(',','.')))?Number(v.trim().replace(',','.')):null:null;
 function validateModel(value){
@@ -29,19 +29,23 @@ const frac=n=>{const str=String(n).toLowerCase(),[mant,exp='0']=str.split('e'),n
 const add=(x,y)=>[x[0]*y[1]+y[0]*x[1],x[1]*y[1]],mul=(x,y)=>[x[0]*y[0],x[1]*y[1]],div=(x,y)=>[x[0]*y[1],x[1]*y[0]];
 const cents=x=>{const sign=x[0]<0n?-1n:1n,a=(x[0]<0n?-x[0]:x[0])*100n,q=(a*2n+x[1])/(2n*x[1])*sign;if(q>BigInt(Number.MAX_SAFE_INTEGER)||q<BigInt(-Number.MAX_SAFE_INTEGER))throw new Error('Сумма вне допустимого диапазона');return Number(q);};
 const roundMoney=n=>cents(frac(n))/100;
+function appliedCoefficients(score,thresholds,k){
+ return k.filter((_,i)=>score>=thresholds[i+1]);
+}
+function stepCost(score,thresholds,baseFraction,k){
+ if(!Number.isFinite(score)||score<0||thresholds.length!==4||!thresholds.every((t,i)=>Number.isFinite(t)&&t>0&&(!i||t>thresholds[i-1]))||k.length!==3||!k.every(v=>Number.isFinite(v)&&v>=0))throw new Error('Некорректные параметры расчёта');
+ // A transition applies in full exactly at its reference threshold. Prior factors remain.
+ let value=mul(baseFraction,div(frac(Math.max(score,thresholds[0])),frac(thresholds[0])));
+ for(const coefficient of appliedCoefficients(score,thresholds,k))value=mul(value,frac(coefficient));
+ return cents(value)/100;
+}
 function cost(score,thresholds,base,k){
- if(!Number.isFinite(score)||score<0||!Number.isFinite(base)||base<=0||thresholds.length!==4||!thresholds.every((t,i)=>Number.isFinite(t)&&t>0&&(!i||t>thresholds[i-1]))||k.length!==3||!k.every(v=>Number.isFinite(v)&&v>=0))throw new Error('Некорректные параметры расчёта');
- const [t0,t1,t2,t3]=thresholds,dist=[Math.max(0,Math.min(score,t1)-t0),Math.max(0,Math.min(score,t2)-t1),Math.max(0,score-t2)];
- let weighted=[0n,1n];for(let i=0;i<3;i++)weighted=add(weighted,mul(frac(k[i]),frac(dist[i])));
- return cents(add(frac(base),mul(div(frac(base),frac(t0)),weighted)))/100;
+ if(!Number.isFinite(base)||base<=0)throw new Error('Некорректная база');
+ return stepCost(score,thresholds,frac(base),k);
 }
 function fairCost(score,kind,source,model){
  const baseFraction=kind==='boss'?mul(frac(source.base),frac(model.management_base_multiplier)):frac(source.base);
- // Preserve the unrounded base, including a non-integer management multiplier.
- const t=source.tracks[kind].thresholds,k=model.growth[kind];
- const d=[Math.max(0,Math.min(score,t[1])-t[0]),Math.max(0,Math.min(score,t[2])-t[1]),Math.max(0,score-t[2])];
- let weighted=[0n,1n];for(let i=0;i<3;i++)weighted=add(weighted,mul(frac(k[i]),frac(d[i])));
- return cents(add(baseFraction,mul(div(baseFraction,frac(t[0])),weighted)))/100;
+ return stepCost(score,source.tracks[kind].thresholds,baseFraction,model.growth[kind]);
 }
 const reasons={not_configured:'Модель не настроена',incomplete_scores:'Недостаточно оценок',invalid_reference:'Проверьте эталоны',unknown_track:'Не указан уровень управления',not_applicable:'Расчёт только для статуса «Работает»',invalid_amount:'Сумма вне допустимого диапазона',missing_salary:'Не указан оклад',invalid_salary:'Некорректный оклад',duplicate_employee:'Несколько действующих карточек сотрудника',unavailable:'Модель временно недоступна'};
 function calculate(card,source,saved){
@@ -56,6 +60,8 @@ function calculate(card,source,saved){
  if(profile.total===null)return fail('incomplete_scores');
  if(source.base===null||!source.tracks[track].valid)return fail('invalid_reference',source.base_reason||source.tracks[track].reason);
  const t=source.tracks[track].thresholds;result.grade=profile.total<t[0]?'Ниже порога Юнлинга':M.careerGrades[t.reduce((best,n,i)=>profile.total>=n?i:best,0)];
+ const applied=appliedCoefficients(profile.total,t,model.growth[track]);
+ result.applied_coefficients=applied;result.transition_multiplier=applied.reduce((a,b)=>a*b,1);
  let fair;try{fair=fairCost(profile.total,track,source,model);}catch{return fail('invalid_amount');}
  const salary=number(card.unit.cost);let indexation=null,indexation_status='ready',cost_after=null;
  if(salary===null)indexation_status=card.unit.cost===null||card.unit.cost===undefined||String(card.unit.cost).trim()===''?'missing_salary':'invalid_salary';
@@ -71,6 +77,6 @@ function analyze(cards,source,saved){
  const totalCents=ready.reduce((sum,r)=>sum+BigInt(Math.round(r.value.indexation*100)),0n);
  return {rows,ready,excluded,summary:{employees:working.length,calculated:ready.length,positive:ready.filter(r=>r.value.indexation>0).length,indexation:totalCents<=BigInt(Number.MAX_SAFE_INTEGER)?Number(totalCents)/100:null,excluded:excluded.length}};
 }
-const api={formulaVersion,defaultModel,number,validateModel,references,roundMoney,cost,fairCost,calculate,analyze,reasons};
+const api={formulaVersion,defaultModel,number,validateModel,references,roundMoney,appliedCoefficients,cost,fairCost,calculate,analyze,reasons};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.UbaitCompensation=api;
 })(globalThis);

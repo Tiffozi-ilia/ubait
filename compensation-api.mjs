@@ -32,11 +32,12 @@ export function createCompensationApi({getScoped,store=createCompensationStore()
   async settings(user){const scoped=await authorized(user);return context(scoped,await store.get());},
   async save(user,body){
    const scoped=await authorized(user);
-   if(Object.keys(body).some(k=>!['model','expected_revision'].includes(k))||!own(body,'model')||!Number.isSafeInteger(body.expected_revision)||body.expected_revision<0)throw fault(400,'Нужны коэффициенты и версия модели.');
+   if(Object.keys(body).some(k=>!['model','expected_revision','formula_version'].includes(k))||!own(body,'model')||!Number.isSafeInteger(body.expected_revision)||body.expected_revision<0)throw fault(400,'Нужны коэффициенты и версия модели.');
+   if(body.formula_version!==C.formulaVersion)throw fault(409,'Формула расчёта обновлена. Перезагрузите страницу перед сохранением.');
    let model;try{model=C.validateModel(body.model);}catch(e){throw fault(400,e.message);}
    const source=C.references(scoped.cards);if(source.base===null||!source.tracks.employee.valid||!source.tracks.boss.valid)throw fault(422,'Для сохранения нужны база Юнлинга и четыре полностью оценённых эталона в каждом треке.');
    // Reject overflow before publishing; every possible score must remain representable.
-   try{C.fairCost(69,'employee',source,model);C.fairCost(30,'boss',source,model);}catch{throw fault(400,'Коэффициенты приводят к слишком большим суммам.');}
+   try{for(const kind of ['employee','boss'])for(const score of [kind==='employee'?69:30,...source.tracks[kind].thresholds.flatMap(t=>[t,Math.max(0,t-.25)])])C.fairCost(score,kind,source,model);}catch{throw fault(400,'Коэффициенты приводят к слишком большим суммам.');}
    const saved=await store.save(model,body.expected_revision,user);return context(scoped,saved);
   },
   async export(user,body){

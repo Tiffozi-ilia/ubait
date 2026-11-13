@@ -17,7 +17,7 @@ for(const name of ['errors.js','stat.js','kanban.js','hr-model.js','compensation
   assert(html.includes(`src="/${name}"`),`Missing module ${name}`);
   new Script(await readFile(new URL('./'+name,import.meta.url),'utf8'),{filename:name});
 }
-for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','kanban-tab','hr-tab','v2.10.0 · 13.11','taskMin','taskMax','stoppedEpicTotals','UbaitAFCT','Состав работ · АФКТ','id="app-sidebar"','id="hr-navigation"','id="sidebar-account"']){
+for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','kanban-tab','hr-tab','v2.10.1 · 13.11','taskMin','taskMax','stoppedEpicTotals','UbaitAFCT','Состав работ · АФКТ','id="app-sidebar"','id="hr-navigation"','id="sidebar-account"']){
   assert(html.includes(text),`Current UI is missing: ${text}`);
 }
 assert(!html.includes('<select'),'Old native-select interface must not be packaged.');
@@ -34,3 +34,6 @@ assert(html.includes('hr-playground-tab')&&hrSource.includes('Сформиров
 assert(html.indexOf('src="/hr-model.js"')<html.indexOf('src="/hr.js"'),'Load the shared model before HR');
 for(const name of ['ubait-compensation.pb.js'])new Script(await readFile(new URL('./pb_hooks/'+name,import.meta.url),'utf8'),{filename:name});
 console.log(`Build verified: Story Map ${BUILD_VERSION}`);
+
+new Script(await readFile(new URL('./pb_migrations/1794590000_compensation_grade_steps.js',import.meta.url),'utf8'),{filename:'compensation-grade-steps-migration'});
+assert((await readFile(new URL('./compensation.js',import.meta.url),'utf8')).includes("const formulaVersion='grade-step-score-v2'"),'Missing grade transition formula');

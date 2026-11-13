@@ -16,7 +16,7 @@ routerAdd('PUT','/api/ubait/compensation',(e)=>{
   const actor=tx.findRecordById('app_users',body.actor_id);if(actor.getBool('disabled'))throw new ForbiddenError();
   const record=tx.findRecordById('hr_compensation','hrcompmodel0001'),previous=JSON.parse(record.getString('document'));
   if(previous.revision!==body.expected_revision){conflict=true;return;}
-  result={key:'hr_compensation_v1',schema_version:1,formula_version:'piecewise-score-v1',revision:previous.revision+1,
+  result={key:'hr_compensation_v1',schema_version:1,formula_version:'grade-step-score-v2',revision:previous.revision+1,
    model:{management_base_multiplier:model.management_base_multiplier,growth:{employee:model.growth.employee,boss:model.growth.boss}},
    updated_at:new Date().toISOString(),updated_by:{id:actor.id,full_name:actor.getString('full_name')}};
   record.set('document',JSON.stringify(result));tx.save(record);
