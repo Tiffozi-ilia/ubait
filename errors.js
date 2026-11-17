@@ -31,20 +31,20 @@ globalThis.StoryMapErrors = (() => {
       return M.cutMatches(s,f)&&(!f.search||s.search.includes(f.search.trim().toLocaleLowerCase('ru')))
         &&(!f.periods.length||(f.exclude?.periods?!periodHit:periodHit));
     };
-    const eligible=[...model.stories.values()].filter(s=>readiness(s.project,model.epics.get(s.epic_id))&&byYear(s.project==='Без проекта'?ownYears([s]):projectYears.get(s.project)||new Set())&&common(s));
+    const eligible=[...model.stories.values()].filter(s=>readiness(s.project_key||s.project,model.epics.get(s.epic_id))&&byYear(!s.initiative_key&&s.project==='Без проекта'?ownYears([s]):projectYears.get(s.project_key||s.project)||new Set())&&common(s));
     const columns=rules.map(rule=>({id:rule.id,title:rule.title,description:rule.description,epic:!!rule.epic,items:[]}));
     for(let i=0;i<rules.length;i++){
       const rule=rules[i];
       if(!rule.epic){columns[i].items=eligible.filter(rule.test).map(s=>({id:s.id,kind:'story',afctData:s.afctData,title:s.title,ba:s.ba,status:s.status,sp:s.sp,pct:s.pct,reason:rule.reason(s),month:s.months.at(-1)?.month||null}));continue;}
       for(const e of model.epics.values()){
-        if(e.missing||e.project!=='Без проекта'||!readiness(e.project,e)||!byYear(ownYears(e.stories)))continue;
+        if(e.missing||e.initiative_key||e.project!=='Без проекта'||!readiness(e.project_key||e.project,e)||!byYear(ownYears(e.stories)))continue;
         // Facets/periods require at least one matching member. Empty epics can
         // be inspected with all years and no story-level filter selections.
         const noStoryFilter=!f.periods.length&&!['stakeholder','direction','stream','department','ba','afct'].some(k=>f[k].length);
         const query=f.search.trim().toLocaleLowerCase('ru');
         const epicHit=!query||[e.id,e.title,e.code,e.reference].join(' ').toLocaleLowerCase('ru').includes(query);
         const memberHit=e.stories.some(s=>common({...s,search:epicHit?' '+query:s.search}));
-        const emptyHit=!e.stories.length&&noStoryFilter&&epicHit&&M.cutMatches({project:e.project,facets:{}},f);
+        const emptyHit=!e.stories.length&&noStoryFilter&&epicHit&&M.cutMatches({project:e.project,project_key:e.project_key,initiative_type:e.initiative_type,monetized:e.monetized,facets:{}},f);
         if(!memberHit&&!emptyHit)continue;
         columns[i].items.push({id:e.id,kind:'epic',title:e.title,ba:'',status:'Эпик',sp:e.sp,pct:e.pct,reason:'Проект не указан',memberCount:e.stories.length});
       }

@@ -1,7 +1,8 @@
 /** Same-origin gateway with server-side PocketBase authentication.
  * No business DB access or calculations. n8n uses a server-only shared secret.
  * Static routes are allowlisted: source, workflow and credentials are never served.
- * A short shared cache + single-flight prevents 40 viewers from launching 40 queries.
+ * Map refreshes read fresh data; simultaneous reads share one in-flight request.
+ * HR retains its existing short shared cache.
  */
 import http from 'node:http';
 import {readFile} from 'node:fs/promises';
@@ -99,7 +100,7 @@ export function createCompetencyDocs({fetchImpl=fetch,now=Date.now,timeoutMs=600
   };
 }
 
-export const BUILD_VERSION='2026.11.13-v2.10.3';
+export const BUILD_VERSION='2026.11.16-v2.11.0';
 
 // Shared in-flight sync. Browsers poll this small status instead of holding an HTTP request open.
 export function createHrSync({webhookUrl,webhookSecret,fetchImpl=fetch,now=Date.now,invalidate=()=>{},timeoutMs=900000}){
@@ -236,7 +237,7 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
   function channel(kind){
    let cache=null,pending=null,generation=0;
    async function upstream() {
-    if(cache && now()-cache.at<cacheMs) return cache.body;
+    if(kind==='hr' && cache && now()-cache.at<cacheMs) return cache.body;
     if(pending) return pending;
     const version=generation;
     const running=(async()=>{
@@ -257,7 +258,7 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
         if(kind==='hr'){
           if(data?.schema_version!==1||data.dataset!=='hr'||data.api_revision!==1||data.source_form_id!==405691||!Array.isArray(data.cards))throw new Error('Неверный ответ n8n HR: нужен флоу «HR — реальные данные 405691».');
         }else if(data?.schema_version!==1 || !Array.isArray(data.stories) || !Array.isArray(data.epics)) throw new Error('Неверный ответ n8n: ожидаются schema_version: 1, stories и epics.');
-        const body=JSON.stringify(data);if(version===generation)cache={body,at:now()};return body;
+        const body=JSON.stringify(data);if(kind==='hr'&&version===generation)cache={body,at:now()};return body;
       } finally { clearTimeout(timer); }
     })().catch(error=>{if(version===generation)cache=null;throw error;}).finally(()=>{if(pending===running)pending=null;});
     pending=running;

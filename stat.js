@@ -189,8 +189,8 @@ globalThis.UbaitKanbanStatistics=(()=>{
   const calendar=o.mode==='flow'&&!rangeError&&o.grain!=='range'?periods(o.from,o.to,o.grain):[];
   const byPeriod=new Map(calendar.map(key=>[key,[]]));for(const r of selected)if(r.date)byPeriod.get(bucket(r.date,o.grain))?.push(r);
   const groupMap=new Map();let multiGroup=false;
-  for(const r of selected){const values=o.group==='project'?[r.task.project]:r.task.facets[o.group]||[];const names=values.length?[...new Set(values)]:['Не указан'];if(names.length>1)multiGroup=true;for(const name of names){if(!groupMap.has(name))groupMap.set(name,[]);groupMap.get(name).push(r);}}
-  const breakdown=[...groupMap].map(([name,rows])=>({name,rows,...measure(rows,o)})).sort((a,b)=>Math.abs(b[o.metric])-Math.abs(a[o.metric])||a.name.localeCompare(b.name,'ru'));
+  for(const r of selected){const values=o.group==='project'?[r.task.project_key||r.task.project]:r.task.facets[o.group]||[];const names=values.length?[...new Set(values)]:['Не указан'];if(names.length>1)multiGroup=true;for(const name of names){if(!groupMap.has(name))groupMap.set(name,[]);groupMap.get(name).push(r);}}
+  const breakdown=[...groupMap].map(([key,rows])=>({key,name:o.group==='project'?(globalThis.UbaitInitiatives?.projectLabel(model,key)||rows[0]?.task.project||key):key,rows,...measure(rows,o)})).sort((a,b)=>Math.abs(b[o.metric])-Math.abs(a[o.metric])||a.name.localeCompare(b.name,'ru'));
   return {options:o,asOf,covered,rangeError,scope,events,stock,issues,selected,multiGroup,breakdown,
    total:measure(selected,o),flowTasks:summarize(raw).tasks,transitionCount:raw.length,
    cards:series.map(s=>({...s,rows:rows(s.id),...measure(rows(s.id),o)})),
