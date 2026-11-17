@@ -17,7 +17,7 @@ for(const name of ['errors.js','stat.js','kanban.js','hr-model.js','compensation
   assert(html.includes(`src="/${name}"`),`Missing module ${name}`);
   new Script(await readFile(new URL('./'+name,import.meta.url),'utf8'),{filename:name});
 }
-for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','kanban-tab','hr-tab','v2.11.2 · 17.11','taskMin','taskMax','stoppedEpicTotals','UbaitAFCT','Состав работ · АФКТ','id="app-sidebar"','id="hr-navigation"','id="sidebar-account"']){
+for(const text of ['Год проектов','Период историй','id="reset"','story-status','errors-tab','statistics-tab','kanban-tab','hr-tab','v2.11.3 · 17.11','taskMin','taskMax','completionTotals','UbaitAFCT','Состав работ · АФКТ','id="app-sidebar"','id="hr-navigation"','id="sidebar-account"']){
   assert(html.includes(text),`Current UI is missing: ${text}`);
 }
 assert(!html.includes('<select'),'Old native-select interface must not be packaged.');
@@ -45,3 +45,7 @@ assert(hrSource.includes('compUI.hydrate(data)')&&hrSource.includes('compUI.chan
 assert(html.includes("if(loadHrMenu)globalThis.UbaitHR?.preload")&&hrSource.includes("function preload(root)"),"Missing HR menu preloading");
 assert(html.includes('globalThis.UbaitInitiatives=')&&html.includes("initiativeTypes:'Тип инициативы'")&&html.includes("monetization:'Монетизация'"),'Missing shared initiative filters');
 assert((await readFile(new URL('./kanban.js',import.meta.url),'utf8')).includes('UbaitInitiatives?.badge'),'Missing monetized-work indicator on Kanban');
+
+const errorsSource=await readFile(new URL('./errors.js',import.meta.url),'utf8');
+for(const id of ['eternal-task','eternal-epic','eternal-project'])assert(errorsSource.includes(id),'Missing overdue diagnostics: '+id);
+assert(html.includes("dates('kanban_stop')")&&html.includes('data-completion-story'),'Missing STOP date or completion details');

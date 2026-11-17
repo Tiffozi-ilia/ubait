@@ -1,4 +1,4 @@
-/* Read-only status board. Normalized SP and sum(used)/sum(sp), as in epic totals.
+/* Read-only status board. SP-weighted latest completion, shared with epic totals.
  * No writes, drag/drop, history queries or extra API calls. */
 globalThis.UbaitKanban=(()=>{
  'use strict';
@@ -16,13 +16,8 @@ globalThis.UbaitKanban=(()=>{
   return key?'custom:'+key:'unspecified';
  }
  function totals(tasks){
-  let sp=0,used=0,missingSp=0,missingUsed=0;
-  for(const task of tasks){
-   if(!Number.isFinite(task.sp)||task.sp<0)missingSp++;else sp+=task.sp;
-   if(!Number.isFinite(task.used))missingUsed++;else used+=task.used;
-  }
-  return {count:tasks.length,sp:tasks.length===missingSp&&tasks.length>0?null:sp,used,missingSp,missingUsed,
-   pct:tasks.length&&!missingSp&&!missingUsed&&sp>0?used/sp*100:null};
+  const totals=globalThis.StoryMapModel.completionTotals(tasks);
+  return {...totals,count:tasks.length,missingSp:tasks.filter(t=>t.completionSp===null).length,missingUsed:tasks.filter(t=>t.readySp===null).length};
  }
  function calculate(model,filters){
   const M=globalThis.StoryMapModel,f={...M.defaults(),...filters};
@@ -32,8 +27,8 @@ globalThis.UbaitKanban=(()=>{
   // are ignored; unassigned tasks remain visible on a status board.
   const groups=M.groups(model,{...f,orphanOnly:false,issuesOnly:false},{includeUnassigned:true});
   for(const task of groups.flatMap(p=>p.epics.flatMap(e=>e.visible))){
-   const id=statusOf(task.status);
-   if(id==='stop'||id==='trash')continue;
+   const id=task.stopped?'done':statusOf(task.status);
+   if(id==='trash')continue;
    scope.push(task);
    if(!byStatus.has(id))byStatus.set(id,{id,title:id==='consultation'?'Консультация':task.status||'Без статуса',color:'var(--sub)',tasks:[]});
    byStatus.get(id).tasks.push(task);
@@ -46,12 +41,12 @@ globalThis.UbaitKanban=(()=>{
   return {scope,columns:[...columns,...extra],...totals(scope),model};
  }
  function readiness(c){
-  const note=c.pct==null?(c.count?'Не хватает SP или освоенных SP для расчёта готовности':'Нет задач'):'Готовность: '+fmt(c.used)+' освоено / '+fmt(c.sp)+' SP';
+  const note=c.pct==null?(c.count?'Не хватает SP или последнего процента для расчёта готовности':'Нет задач'):'Готовность: '+fmt(c.readySp)+' готово / '+fmt(c.sp)+' SP';
   return '<div class="kb-board-readiness" title="'+esc(note)+'"><div class="kb-board-track" '+(c.pct==null?'':'role="progressbar" aria-label="Готовность статуса" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.max(0,Math.min(100,c.pct))+'"')+'><i style="width:'+(c.pct==null?0:Math.max(0,Math.min(100,c.pct)))+'%"></i></div><span>'+percent(c.pct)+'</span></div>';
  }
  function card(task,model){
   const epic=model.epics.get(task.epic_id),path=[task.project,epic?.missing?'Без эпика':epic?.title].filter(Boolean).join(' · ');
-  return '<button type="button" class="kb-board-task" data-board-task="'+esc(task.id)+'" aria-label="'+esc(task.title)+' · '+fmt(task.sp)+' SP · '+percent(task.pct)+'"><span class="kb-board-task-id">#'+esc(task.id)+'<span class="kb-board-task-badges">'+globalThis.UbaitAFCT.badge(task)+(globalThis.UbaitInitiatives?.badge(task)||'')+'</span></span><strong class="kb-board-task-title">'+esc(task.title)+'</strong><span class="kb-board-task-path" title="'+esc(path)+'">'+esc(path)+'</span><span class="kb-board-task-person">'+esc(task.ba||'Без аналитика')+'</span><span class="kb-board-task-footer"><b>'+fmt(task.sp)+' <small>SP</small></b><span title="Текущая готовность задачи">'+percent(task.pct)+'</span></span></button>';
+  return '<button type="button" class="kb-board-task" data-board-task="'+esc(task.id)+'" aria-label="'+esc(task.title)+' · '+fmt(task.completionSp)+' SP · '+percent(task.pct)+'"><span class="kb-board-task-id">#'+esc(task.id)+(task.stopped?' · STOP':'')+'<span class="kb-board-task-badges">'+globalThis.UbaitAFCT.badge(task)+(globalThis.UbaitInitiatives?.badge(task)||'')+'</span></span><strong class="kb-board-task-title">'+esc(task.title)+'</strong><span class="kb-board-task-path" title="'+esc(path)+'">'+esc(path)+'</span><span class="kb-board-task-person">'+esc(task.ba||'Без аналитика')+'</span><span class="kb-board-task-footer"><b>'+fmt(task.completionSp)+' <small>SP</small></b><span title="Текущая готовность задачи">'+percent(task.pct)+'</span></span></button>';
  }
  function list(c,report,limit){
   return c.tasks.length?c.tasks.slice(0,limit).map(t=>card(t,report.model)).join('')+(c.count>limit?'<button type="button" class="more kb-board-more" data-board-more="'+esc(c.id)+'">Ещё '+Math.min(pageSize,c.count-limit)+' · осталось '+(c.count-limit)+'</button>':''):'<div class="kb-board-empty">Нет задач</div>';

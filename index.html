@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light"><meta name="robots" content="noindex,nofollow">
-<meta name="app-version" content="2026.11.17-v2.11.2">
+<meta name="app-version" content="2026.11.17-v2.11.3">
 <meta name="ui-revision" content="R21-compensation">
-<title>УБАИТ · Задачи, KPI, компетенции</title>
+<title>УБАИТ · Команда и продукты</title>
 <link rel="stylesheet" href="/hr.css">
 <style>
 :root{color-scheme:light;--bg:#faf9f7;--paper:#fff;--ink:#22303b;--sub:#65717b;--line:#dce1e5;--accent:#896322;--soft:#f3eddf;--track:#e7e9e9;--green:#266e52;--blue:#326297;--danger:#9b391b;--col:236px;--rail:76px}
@@ -46,6 +46,7 @@ dialog{background:var(--paper);color:var(--ink);border:1px solid var(--line);bor
 @media(max-width:1100px){.stat-rank-row.has-averages{grid-template-columns:18px minmax(105px,1fr) 68px 68px minmax(30px,.6fr) 60px 8px;gap:8px}}
 @media(max-width:850px){.stat-rank-row.has-averages{grid-template-columns:16px minmax(110px,1fr) 65px 65px 55px}.has-averages .stat-meter{grid-column:2/-1;grid-row:2}.has-averages .stat-average strong{font-size:12px}}
 @media(max-width:450px){.stat-rank-row.has-averages{grid-template-columns:16px minmax(80px,1fr) 58px 58px 45px;gap:5px;padding:10px 8px}.has-averages .stat-name strong{font-size:11px}}
+.completion-table .text-button{text-align:left;overflow-wrap:anywhere}
 </style>
 <style>
 .loading-cover{position:fixed;inset:118px 0 0;z-index:9;display:grid;place-items:center;background:var(--bg)}.loading-box{text-align:center;display:flex;align-items:center;flex-direction:column;gap:16px;font-size:16px;font-weight:600}.spinner{width:48px;height:48px;border:4px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .9s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.spinner{animation-duration:2s}}
@@ -221,7 +222,7 @@ SOFTWARE.
    <button class="action" id="theme-toggle" type="button" title="Включить тёмную тему" aria-label="Включить тёмную тему"><span>Светлая тема</span></button>
    <button class="action" id="logout" type="button" title="Выйти из аккаунта"><svg class="sidebar-icon " viewBox="0 0 24 24" aria-hidden="true"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>Выйти</button>
   </div></details>
-  <span class="build-version" title="Сборка 2026.11.17-v2.11.2">v2.11.2 · 17.11</span>
+  <span class="build-version" title="Сборка 2026.11.17-v2.11.3">v2.11.3 · 17.11</span>
  </footer>
 </aside>
 <section class="app-panel" id="story-map-panel">
@@ -370,14 +371,15 @@ globalThis.UbaitInitiatives=(()=>{
 /* Project-year is evaluated BEFORE story/facet filters, over all project members.
  * Story periods are ORed; included facets use selectable OR (default) / AND.
  * Excluded selections always subtract matches. Year/period/range gates stay independent.
- * STOP completion uses actual utilized SP as its finished scope; monthly facts stay intact.
+ * Completion uses the latest monthly end percentage, not the sum of monthly deltas.
+ * STOP is visible in Done at 100% of its last completed scope; monthly facts stay intact.
  * Filtering never recomputes project/epic completion.
  */
 globalThis.StoryMapModel=(()=>{
  const number=v=>v==null||v===''?null:Number.isFinite(Number(v))?Number(v):null;
  const text=v=>v==null?'':String(v).trim();
  const status=v=>text(v).toLocaleLowerCase('ru').replace(/\s+/g,' ');
- const lanes=new Map(Object.entries({done:'done','готово':'done',later:'backlog','later (бэклог)':'backlog',next:'backlog','next (в очереди)':'backlog',backlog:'backlog','бэклог':'backlog','в очереди':'backlog','in progress':'wip','in progress (в анализе)':'wip','в анализе':'wip','backlog it (передано ит)':'wip','change request':'wip','in progress it':'wip',testing:'wip','in review (опэ)':'wip',consultation:'wip','консультация':'wip','тестирование':'wip'}));
+ const lanes=new Map(Object.entries({done:'done','готово':'done',stop:'done',later:'backlog','later (бэклог)':'backlog',next:'backlog','next (в очереди)':'backlog',backlog:'backlog','бэклог':'backlog','в очереди':'backlog','in progress':'wip','in progress (в анализе)':'wip','в анализе':'wip','backlog it (передано ит)':'wip','change request':'wip','in progress it':'wip',testing:'wip','in review (опэ)':'wip',consultation:'wip','консультация':'wip','тестирование':'wip'}));
  const lane=v=>lanes.get(status(v))||'other';
  const monthKey=v=>/^\d{4}\.(0[1-9]|1[0-2])$/.test(text(v))?text(v):null;
  const tokens=v=>[...new Set(text(v).split(';').map(text).filter(Boolean))];
@@ -390,38 +392,57 @@ globalThis.StoryMapModel=(()=>{
  const positive=m=>monthKey(m.month)&&m.sp_utilized!==null&&m.sp_utilized>0;
  const activity=m=>positive(m)||(monthKey(m.month)&&m.sp_utilized===0&&m.start!==null&&m.end!==null&&m.end>m.start);
  function inPeriod(month,period){if(!monthKey(month))return false;if(/^\d{4}\.Q[1-4]$/.test(period))return month.slice(0,4)===period.slice(0,4)&&Math.ceil(Number(month.slice(5))/3)===Number(period.at(-1));return month===period;}
- // Rebuild only affected epic totals from the complete, unfiltered response.
- // This works whether upstream totals include or exclude STOP. Never mutate facts.
- function stoppedEpicTotals(rows){
-  const totals=new Map();
-  for(const r of rows)if(status(r.status)==='stop')totals.set(text(r.epic_id)||'unassigned',{sp:0,used:0,count:0,stopped:0,complete:true,known:true,years:new Set()});
-  if(!totals.size)return totals;
-  for(const r of rows){
-   const t=totals.get(text(r.epic_id)||'unassigned'),st=status(r.status);if(!t||st==='trash')continue;
-   const stopped=st==='stop',months=Array.isArray(r.months)?r.months:[],fact=number(r.sp_utilized);
-   // No monthly rows means no recorded work. An uncalculated monthly row is unknown.
-   const used=months.some(m=>number(m.sp_utilized)===null)?null:fact??months.reduce((sum,m)=>sum+number(m.sp_utilized),0);
-   const sp=stopped?used:number(r.sp_true);
-   t.count++;if(stopped)t.stopped++;else t.complete=false;
-   if(sp===null||sp<0||used===null||stopped&&used<0)t.known=false;
-   else {t.sp+=sp;t.used+=used;}
-   for(const m of months)if(monthKey(m.month)&&number(m.sp_utilized)>0)t.years.add(m.month.slice(0,4));
-  }
-  return totals;
+ // One completion measure shared by the map and status board. It never writes
+ // back to monthly SP: work during a month and completion to date differ.
+ function storyCompletion(s){
+  const last=s.months.filter(m=>monthKey(m.month)).at(-1);
+  const actualPct=last?.end??null,stopped=status(s.status)==='stop';
+  const progress=last?actualPct:0;
+  const validProgress=progress!==null&&progress>=0&&progress<=100;
+  const readySp=s.sp===0?0:s.sp!==null&&s.sp>=0&&validProgress?s.sp*progress/100:null;
+  return {stopped,actualPct,pct:stopped?100:actualPct,readySp,completionSp:stopped?readySp:s.sp};
+ }
+ function completionTotals(rows){
+  const sum=key=>rows.every(s=>number(s[key])!==null&&s[key]>=0)?rows.reduce((n,s)=>n+s[key],0):null;
+  const sp=sum('completionSp'),readySp=sum('readySp');
+  const used=rows.every(s=>number(s.used)!==null)?rows.reduce((n,s)=>n+s.used,0):null;
+  const pct=sp!==null&&readySp!==null?(sp>0?readySp/sp*100:rows.length&&rows.every(s=>s.stopped)?100:null):null;
+  return {sp,readySp,used,pct,sp_undone:sp!==null&&readySp!==null?sp-readySp:null};
+ }
+ const calendarDate=v=>{const s=text(v),n=/^\d{4}-\d{2}-\d{2}$/.test(s)?Date.parse(s+'T00:00:00Z'):NaN;return Number.isFinite(n)&&new Date(n).toISOString().slice(0,10)===s?s:null;};
+ function durationValues(start,end,until,isCompleted,missingEnd){
+  const valid=!!(start&&until&&until>=start);
+  return {start,end,isCompleted,maturity_days:valid?(Date.parse(until)-Date.parse(start))/86400000:null,
+   duration_issue:!start?'Нет даты начала анализа':!until?missingEnd:!valid?'Дата начала позже окончания расчёта':null};
+ }
+ function taskDuration(s,today){
+  const milestones=Array.isArray(s.kanban)?s.kanban:[];
+  const dates=code=>milestones.filter(m=>m.status_code===code).map(m=>calendarDate(m.date)).filter(Boolean).sort();
+  const start=dates('kanban_in_progress')[0]||calendarDate(s.start),isCompleted=s.lane==='done';
+  const end=s.stopped?dates('kanban_stop').at(-1)||null:isCompleted?dates('kanban_done').at(-1)||calendarDate(s.end):null;
+  return durationValues(start,end,isCompleted?end:today,isCompleted,s.stopped?'У задачи STOP нет даты перехода в STOP':isCompleted?'У завершённой задачи нет даты Done':'Нет даты среза данных');
+ }
+ function aggregateDuration(rows,today){
+  const starts=rows.map(s=>s.start).filter(Boolean).sort(),isCompleted=rows.length>0&&rows.every(s=>s.isCompleted);
+  const end=isCompleted&&rows.every(s=>s.end)?rows.map(s=>s.end).sort().at(-1):null;
+  return durationValues(starts[0]||null,end,isCompleted?end:today,isCompleted,isCompleted?'Не у всех завершённых задач есть дата Done или STOP':'Нет даты среза данных');
  }
  function build(data,{includeExcluded=false,includeStopped=false}={}){
   if(data?.schema_version!==1||![2,3,4].includes(data.api_revision)||!Array.isArray(data.stories)||!Array.isArray(data.epics))throw new Error('Нужен обновлённый запрос Story Map в ноде PostgreSQL. Замените SQL вебхука.');
   const epics=new Map(),stories=new Map(),projects=new Map(),initiativeEnabled=data.meta?.initiatives_revision===1;
+  const stamp=new Date(data.generated_at),today=calendarDate(data.meta?.duration_as_of)||(Number.isFinite(stamp.valueOf())?new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',year:'numeric',month:'2-digit',day:'2-digit'}).format(stamp):null);
   const initiatives=new Map((initiativeEnabled&&Array.isArray(data.initiatives)?data.initiatives:[]).filter(i=>i&&I.keyPattern.test(i.key)).map(i=>[i.key,{...i}]));
   for(const r of data.epics){const id=text(r.id),synthetic=initiativeEnabled&&r.synthetic===true&&I.keyPattern.test(text(r.initiative_key))&&id==='synthetic:'+text(r.initiative_key);if((!/^\d+$/.test(id)&&!synthetic)||epics.has(id))throw new Error('Некорректный или повторный ID эпика.');epics.set(id,{...r,...I.read(r,initiativeEnabled),id,synthetic,title:text(r.title)||'Название не загружено · #'+id,titleMissing:!text(r.title),project:text(r.project)||'Без проекта',sp:number(r.sp),used:number(r.sp_utilized),pct:number(r.ready)===null?null:number(r.ready)*100,stories:[],missing:false});}
   for(const r of data.stories){
-   if(status(r.status)==='trash'||!includeExcluded&&status(r.status)==='stop'&&!includeStopped)continue;
+   if(status(r.status)==='trash')continue;
    const id=text(r.id);if(!/^\d+$/.test(id)||stories.has(id))throw new Error('Некорректный или повторный ID истории.');
    const eid=text(r.epic_id)||'unassigned';
    if(!epics.has(eid))epics.set(eid,{id:eid,title:eid==='unassigned'?'Без эпика':'Эпик #'+eid+' не загружен',titleMissing:true,project:'Без проекта',project_key:'Без проекта',initiative_key:'',initiative_type:'',monetized:null,sp:null,used:null,pct:null,stories:[],missing:true});
    const e=epics.get(eid),spEstimated=typeof r.sp_estimated==='boolean'?r.sp_estimated:number(r.sp_true)!==null,missingEstimate=r.sp_estimated===false,months=(Array.isArray(r.months)?r.months:[]).map(m=>({...m,month:text(m.month),start:number(m.start),end:number(m.end),sp_utilized:missingEstimate?0:number(m.sp_utilized),sp_ready:missingEstimate?0:number(m.sp_ready)})).sort((a,b)=>(monthKey(a.month)||'').localeCompare(monthKey(b.month)||''));
    const identity=I.read({...r,project:e.project,project_key:r.project_key||e.project_key,initiative_key:r.initiative_key||e.initiative_key,initiative_type:r.initiative_type||e.initiative_type,monetized:Object.hasOwn(r,'monetized')?r.monetized:e.monetized},initiativeEnabled);
    const s={...r,...identity,id,epic_id:eid,title:text(r.title)||'История #'+id,status:text(r.status),lane:lane(r.status),spEstimated,spEstimate:number(r.sp_estimate),sp:missingEstimate?0:number(r.sp_true),used:missingEstimate?0:number(r.sp_utilized),pct:months.filter(m=>monthKey(m.month)).at(-1)?.end??null,months,project:e.project,issues:[],facets:{}};
+   Object.assign(s,storyCompletion(s));
+   Object.assign(s,taskDuration(s,today));
    if(initiativeEnabled&&r.initiative_issue)s.issues.push(text(r.initiative_issue));
    for(const k of ['stakeholder','stream','department','ba']){const value=k==='department'&&data.meta?.department_source!=='unit.team'?'':r[k];s[k]=text(value);s.facets[k]=tokens(value);}
    if(data.meta?.department_source!=='unit.team')s.issues.push('Источник отделов ещё не обновлён: нужен SQL со штаткой unit.team');
@@ -438,27 +459,23 @@ globalThis.StoryMapModel=(()=>{
    s.search=[s.id,s.title,s.ba,s.project,s.initiative_key,I.types[s.initiative_type],e.title,e.code,e.reference].join(' ').toLocaleLowerCase('ru');
    stories.set(id,s);e.stories.push(s);
   }
-  if(!includeExcluded)for(const [id,t] of stoppedEpicTotals(data.stories)){
-   const e=epics.get(id);if(!e)continue;
-   e.sp=t.known?t.sp:null;e.used=t.known?t.used:null;e.sp_undone=t.known?t.sp-t.used:null;
-   e.pct=t.known?(t.sp>0?t.used/t.sp*100:t.complete?100:null):null;
-   e.stoppedCount=t.stopped;e.completionTaskCount=t.count;e.completionYears=t.years;
-  }
-  const sourceByEpic=new Map();
-  for(const r of data.stories){if(status(r.status)==='trash')continue;const key=text(r.epic_id)||'unassigned';if(!sourceByEpic.has(key))sourceByEpic.set(key,[]);sourceByEpic.get(key).push(r);}
+  // Recompute EVERY epic from its full task membership after initiative links
+  // have been resolved. Upstream aggregates can use the older delta formula.
   for(const e of epics.values()){
-   e.completionIssues=[];
-   if(e.pct===null){
-    for(const r of sourceByEpic.get(e.id)||[]){
-     const stopped=status(r.status)==='stop',missingFact=(r.months||[]).some(m=>number(m.sp_utilized)===null);
-     if((!stopped&&number(r.sp_true)===null)||missingFact)e.completionIssues.push({id:text(r.id),title:text(r.title),reason:missingFact?'Не рассчитана месячная утилизация':'Не рассчитаны SP',stopped});
-    }
-    e.completionReason=e.completionIssues.length?'Нет данных для расчёта у '+e.completionIssues.length+' задач, включая скрытые':e.missing?'Связанный эпик не загружен':e.sp===0?'Суммарные SP равны нулю':'Не рассчитаны суммарные SP или утилизация';
-   }
+   Object.assign(e,completionTotals(e.stories));delete e.completionReason;
+   Object.assign(e,aggregateDuration(e.stories,today));
+   e.completionTaskCount=e.stories.length;e.stoppedCount=e.stories.filter(s=>s.stopped).length;
+   e.completionIssues=e.stories.filter(s=>s.completionSp===null||s.readySp===null).map(s=>({id:s.id,title:s.title,stopped:s.stopped,reason:s.sp===null||s.sp<0?'Не рассчитаны SP':'Не указан или некорректен последний месячный процент'}));
+   if(e.pct===null)e.completionReason=e.completionIssues.length?'Нет данных для расчёта у '+e.completionIssues.length+' задач':!e.stories.length?'В эпике нет задач':e.sp===0?'Суммарные SP равны нулю':'Не рассчитан готовый объём';
   }
   for(const e of epics.values()){e.stories.sort(cmp);if(!projects.has(e.project_key))projects.set(e.project_key,{id:e.project_key,title:e.project,initiative_key:e.initiative_key,initiative_type:e.initiative_type,monetized:e.monetized,epics:[],years:new Set()});const p=projects.get(e.project_key);p.epics.push(e);for(const y of e.completionYears||[])p.years.add(y);for(const s of e.stories)for(const m of s.months)if(includeExcluded?globalThis.StoryMapErrors.worked(m):activity(m))p.years.add(m.month.slice(0,4));}
-  for(const p of projects.values()){p.epics.sort(cmp);const ok=p.epics.every(e=>e.sp!==null&&e.used!==null&&!e.missing);p.sp=ok?p.epics.reduce((n,e)=>n+e.sp,0):null;p.used=ok?p.epics.reduce((n,e)=>n+e.used,0):null;p.pct=p.sp>0?p.used/p.sp*100:ok&&p.sp===0&&p.epics.every(e=>e.pct===100)?100:null;}
-  for(const p of projects.values())if(p.pct===null){const unknown=p.epics.filter(e=>e.pct===null&&e.sp!==0);p.completionReason=unknown.length?'Нет полного расчёта у эпиков: '+unknown.map(e=>e.title).join('; '):'Суммарные SP равны нулю';}
+  for(const p of projects.values()){
+   p.epics.sort(cmp);
+   // Flatten memberships, never average epic percentages: each task keeps its SP weight.
+   Object.assign(p,completionTotals(p.epics.flatMap(e=>e.stories)));
+   Object.assign(p,aggregateDuration(p.epics.flatMap(e=>e.stories),today));
+   if(p.pct===null){const unknown=p.epics.filter(e=>e.completionIssues.length);p.completionReason=unknown.length?'Нет полного расчёта у эпиков: '+unknown.map(e=>e.title).join('; '):'Суммарные SP равны нулю или нет задач';}
+  }
   return {epics,stories,projects:[...projects.values()].sort(cmp),initiatives,generatedAt:data.generated_at,meta:data.meta||{}};
  }
  function inRange(v,min,max){return v===null?(min===0&&max===100):v>=min&&v<=max;}
@@ -477,7 +494,7 @@ globalThis.StoryMapModel=(()=>{
    .map(p=>({...p,epics:p.epics.filter(e=>(f.orphanOnly?e.id==='unassigned':includeUnassigned||e.id!=='unassigned')&&inRange(e.pct,f.epicMin,f.epicMax)).map(e=>({...e,visible:e.stories.filter(s=>matches(s,f))})).filter(e=>e.visible.length||(!narrowed&&!e.stories.length&&cutMatches({project:p.title,project_key:p.id,initiative_type:p.initiative_type,monetized:p.monetized,facets:{}},f)))})).filter(p=>p.epics.length);
  }
  function options(model,key){if(key==='projectYear')return [...new Set(model.projects.flatMap(p=>[...p.years]))].sort().reverse();if(key==='project')return [...model.projects].sort((a,b)=>I.projectLabel(model,a.id).localeCompare(I.projectLabel(model,b.id),'ru')).map(p=>p.id);if(key==='periods'){const months=[...new Set([...model.stories.values()].flatMap(s=>s.months.filter(activity).map(m=>m.month)))];return [...new Set(months.flatMap(m=>[m,m.slice(0,4)+'.Q'+Math.ceil(Number(m.slice(5))/3)]))].sort().reverse();}return [...new Set([...model.stories.values()].flatMap(s=>s.facets[key]||[]))].sort((a,b)=>a.localeCompare(b,'ru'));}
- return {build,groups,matches,cutMatches,defaults,options,lane,number,positive,activity,inPeriod,currentYear};
+ return {build,groups,matches,cutMatches,defaults,options,lane,number,positive,activity,inPeriod,currentYear,completionTotals};
 })();
 </script>
 <script src="/auth-client.js"></script>
@@ -497,10 +514,10 @@ globalThis.StoryMapModel=(()=>{
  const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const fmt=v=>v==null?'—':new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(v);
  const percent=v=>v==null?'—':fmt(v)+'%';
- const totalSp=(r,kind)=>`<span class="sp-total" title="${r.sp==null?'Суммарные SP '+kind+' не рассчитаны':'Суммарные SP '+kind+' целиком. STOP — в объёме освоенных SP; Trash исключён. Фильтры историй не меняют эту сумму.'}" aria-label="Суммарные SP ${kind}: ${r.sp==null?'не рассчитаны':fmt(r.sp)}">${fmt(r.sp)} SP</span>`;
+ const totalSp=(r,kind)=>`<span class="sp-total" title="${r.sp==null?'Суммарные SP '+kind+' не рассчитаны':'Суммарные SP '+kind+' целиком. STOP — в объёме по последнему проценту; Trash исключён. Фильтры историй не меняют эту сумму.'}" aria-label="Суммарные SP ${kind}: ${r.sp==null?'не рассчитаны':fmt(r.sp)}">${fmt(r.sp)} SP</span>`;
  const durationDays=r=>{const n=M.number(r.maturity_days);return n!==null&&n>=0&&Number.isInteger(n)?n:null;};
  const durationText=r=>durationDays(r)===null?'— дн.':fmt(durationDays(r))+' дн.';
- const durationHint=r=>durationDays(r)===null?(r.duration_issue||'Нет данных для расчёта длительности'):'Длительность: '+durationText(r)+' От начала анализа до '+(r.end?'завершения':'даты среза данных')+'; календарные дни.';
+ const durationHint=r=>durationDays(r)===null?(r.duration_issue||'Нет данных для расчёта длительности'):'Длительность: '+durationText(r)+' От начала анализа до '+(r.end?(r.stopped?'перехода в STOP':'завершения'):'даты среза данных')+'; календарные дни.';
  const duration=r=>`<span class="duration" title="${escape(durationHint(r))}" aria-label="${escape(durationHint(r))}">${durationText(r)}</span>`;
  const day=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'')?v.slice(8)+'.'+v.slice(5,7)+'.'+v.slice(0,4):'—';
  const date=v=>{if(!v)return'—';const d=new Date(v);return Number.isNaN(+d)?String(v):new Intl.DateTimeFormat('ru-RU',{dateStyle:'short',timeStyle:'short'}).format(d);};
@@ -519,7 +536,7 @@ globalThis.StoryMapModel=(()=>{
  const save=()=>{try{localStorage.setItem('ubait-story-map-ui-v3',JSON.stringify(state));}catch{}};
  try{const saved=JSON.parse(localStorage.getItem('ubait-story-map-ui-v3')||'null');if(saved?.matchMode==='all')state.matchMode='all';for(const k of Object.keys(tabs))if(k!=='readiness'&&saved?.exclude?.[k]===true)state.exclude[k]=true;}catch{}
  const hasChanges=()=>JSON.stringify(state)!==JSON.stringify(M.defaults());
- function card(s){const badge=globalThis.UbaitAFCT.badge(s),coin=I.badge(s);return `<button class="story ${s.lane} ${s.issues.length?'has-issue':''}" data-story="${s.id}" aria-label="${escape(s.title)}, ${s.lane==='wip'?escape(s.status)+', ':''}${percent(s.pct)}, длительность ${durationText(s)}">${s.issues.length?'<span class="issue-dot" aria-label="Есть замечания">●</span>':''}<span class="story-title">${escape(s.title)}</span>${badge||coin||s.lane==='wip'?`<span class="story-meta">${s.lane==='wip'?`<span class="story-status" title="${escape(s.status)}">${escape(s.status)}</span>`:''}${badge||coin?`<span class="story-badges">${badge}${coin}</span>`:''}</span>`:''}<span class="story-bottom"><span class="story-person">${escape(s.ba)||'Аналитик не указан'}</span><span class="story-stats"><span class="percent">${percent(s.pct)}</span><span>${fmt(s.sp)} SP · ${duration(s)}</span></span></span></button>`;}
+ function card(s){const badge=globalThis.UbaitAFCT.badge(s),coin=I.badge(s);return `<button class="story ${s.lane} ${s.issues.length?'has-issue':''}" data-story="${s.id}" aria-label="${escape(s.title)}, ${s.lane==='wip'||s.stopped?escape(s.status)+', ':''}${percent(s.pct)}, длительность ${durationText(s)}">${s.issues.length?'<span class="issue-dot" aria-label="Есть замечания">●</span>':''}<span class="story-title">${escape(s.title)}</span>${badge||coin||s.lane==='wip'||s.stopped?`<span class="story-meta">${s.lane==='wip'||s.stopped?`<span class="story-status" title="${escape(s.status)}">${escape(s.status)}</span>`:''}${badge||coin?`<span class="story-badges">${badge}${coin}</span>`:''}</span>`:''}<span class="story-bottom"><span class="story-person">${escape(s.ba)||'Аналитик не указан'}</span><span class="story-stats"><span class="percent">${percent(s.pct)}</span><span>${fmt(s.completionSp)} SP · ${duration(s)}</span></span></span></button>`;}
  function dimensions(){const css=getComputedStyle($('matrix'));return {col:parseFloat(css.getPropertyValue('--col'))||236,rail:parseFloat(css.getPropertyValue('--rail'))||76};}
  function renderWindow(force=false){
   if(view!=='map'||!model||!viewEpics.length)return;
@@ -527,7 +544,7 @@ globalThis.StoryMapModel=(()=>{
   const key=lo+':'+hi;if(!force&&key===windowKey){syncScroll();return;}windowKey=key;
   const visible=viewEpics.slice(lo,hi),all=viewEpics.flatMap(e=>e.visible),laneDefs=[['done','Done'],['wip','WIP'],['backlog','Backlog']];if(all.some(s=>s.lane==='other'))laneDefs.push(['other','Другие']);
   const style=i=>`grid-column:${i+2};grid-row:1`;
-  let offset=0;const heads=viewGroups.map(p=>{const start=offset;offset+=p.epics.length;const a=Math.max(start,lo),b=Math.min(offset,hi);return b>a?`<section class="project-head" style="grid-column:${a+2} / span ${b-a};grid-row:1" title="${escape(p.title)} · ${fmt(p.used)} / ${fmt(p.sp)} SP${p.completionReason?' · '+escape(p.completionReason):''}"><h2>${escape(p.title)}</h2><div class="project-metrics"><span class="percent">${percent(p.pct)}</span>${totalSp(p,'проекта')}</div></section>`:'';}).join('');
+  let offset=0;const heads=viewGroups.map(p=>{const start=offset;offset+=p.epics.length;const a=Math.max(start,lo),b=Math.min(offset,hi);return b>a?`<section class="project-head" style="grid-column:${a+2} / span ${b-a};grid-row:1" title="${escape(p.title)} · ${fmt(p.readySp)} / ${fmt(p.sp)} SP готового объёма${p.completionReason?' · '+escape(p.completionReason):''}"><h2>${escape(p.title)}</h2><div class="project-metrics"><span class="percent">${percent(p.pct)}</span>${totalSp(p,'проекта')}</div></section>`:'';}).join('');
   $('matrix').innerHTML=`<div class="map-head grid"><div class="head-rail">Эпики →<br>Истории ↓</div>${heads}${visible.map((e,j)=>`<button class="epic-head" style="grid-column:${lo+j+2};grid-row:2" data-epic="${escape(e.id)}" title="${escape(e.title)}${e.completionReason?' · '+escape(e.completionReason):''}"><h3>${escape(e.title)}</h3><div class="epic-footer">${totalSp(e,'эпика')}${duration(e)}${bar(e.pct,'Готовность эпика')}</div></button>`).join('')}</div>${laneDefs.map(([id,name])=>{
    const count=all.filter(s=>s.lane===id).length,closed=state.collapsed[id];
    // A lane keeps the SAME height across horizontal windows: no jumps while scrolling.
@@ -546,7 +563,7 @@ globalThis.StoryMapModel=(()=>{
   if(view==='statistics'&&statisticsMode==='kanban'){const r=globalThis.UbaitKanbanStatistics.mount($('kanban-statistics-view'),model,state);$('counts').textContent=r.scope.length+' задач в разрезе';$('reset').disabled=false;return;}
   if(view==='errors'){
    if(!errorCoverage){$('errors-view').innerHTML='<div class="empty-state">Для проверки нужен обновлённый SQL вебхука (revision 3). Старый ответ содержит неполный состав данных.</div>';$('counts').textContent='Проверка недоступна: неполный состав данных';return;}
-   const result=globalThis.StoryMapErrors.evaluate(errorModel,state);$('errors-view').innerHTML=globalThis.StoryMapErrors.render(result,{escape,fmt,limit:errorLimit});$('counts').textContent=`${result.taskCount} задач · ${result.epicCount} эпиков · ${result.issueCount} замечаний`;return;
+   const result=globalThis.StoryMapErrors.evaluate(errorModel,state);$('errors-view').innerHTML=globalThis.StoryMapErrors.render(result,{escape,fmt,limit:errorLimit});$('counts').textContent=`${result.taskCount} задач · ${result.epicCount} эпиков · ${result.projectCount} проектов · ${result.issueCount} замечаний`;return;
   }
   const report=globalThis.StoryMapStatistics.calculate(statisticsModel,state,statsState);statsReport=report;if(!report.periods.includes(statsState.focusPeriod))statsState.focusPeriod='';$('statistics-view').innerHTML=globalThis.StoryMapStatistics.render(report,{escape,fmt,...statsState});$('counts').textContent=`${report.scopeTasks} задач в разрезе · ${report.total.total.tasks.size} с фактом за период`;
   for(const button of $('stats-controls').querySelectorAll('[data-stats-metric]'))button.setAttribute('aria-pressed',String(button.getAttribute('data-stats-metric')===statsState.metric));
@@ -601,8 +618,18 @@ globalThis.StoryMapModel=(()=>{
  }
  function renderOptions(){const source=view==='errors'?errorModel:isScrum()?statisticsModel:model;if(tab==='afct'){$('options-list').innerHTML=globalThis.UbaitAFCT.filterHTML(source,draft.afct,optionSearch);return;}const label=v=>tab==='periods'?periodLabel(v):tab==='project'?I.projectLabel(source,v):v;const values=filterOptions(tab).filter(v=>label(v).toLocaleLowerCase('ru').includes(optionSearch.toLocaleLowerCase('ru')));$('options-list').innerHTML=values.length?values.map(v=>`<label class="option"><input type="${tab==='projectYear'?'radio':'checkbox'}" name="facet" value="${escape(v)}" data-option="true" ${(tab==='projectYear'?draft[tab]===v:draft[tab].includes(v))?'checked':''}><span>${escape(label(v))}</span></label>`).join(''):'<p class="help">Нет подходящих значений.</p>';}
  const row=(k,v)=>`<dt>${escape(k)}</dt><dd>${escape(v??'—')}</dd>`;
- function openStory(id){const activeModel=view==='errors'?errorModel:isScrum()?statisticsModel:model,s=activeModel.stories.get(id);if(!s)return;const e=activeModel.epics.get(s.epic_id);$('detail-id').textContent='#'+s.id;$('detail-body').innerHTML=`<h2 class="detail-title" id="detail-title">${escape(s.title)}</h2><p class="detail-path">${escape(s.project)} → ${escape(e.title)}</p>${bar(s.pct,'Готовность истории')}<dl class="detail-grid">${row('Статус',s.status)}${row('Аналитик',s.ba||'—')}${s.spEstimated===false?row('Оценка SP','Не заполнена — в расчётах 0 SP'):''}${row('SP',fmt(s.sp))}${row('Освоено SP',fmt(s.used))}${row('Начало анализа',day(s.start))}${row('Завершение',day(s.end))}${row('Длительность, дней',durationDays(s))}${row('Стейкхолдер',s.stakeholder||'—')}${row('Направление',s.facets.direction.join('; ')||'—')}${row('Стрим',s.stream||'—')}${row('Отдел',s.department||'—')}${row('Обновлено в Pyrus',date(s.modified_at))}</dl><p class="help">${escape(durationHint(s))}</p>${I.detail(s,activeModel)}${globalThis.UbaitAFCT.detail(s)}${s.issues.map(i=>`<p class="warning">${escape(i)}</p>`).join('')}${[['Я как…',s.i_as],['Хочу…',s.want],['Чтобы…',s.so_that]].filter(([,v])=>v).map(([k,v])=>`<div class="text-block"><strong>${k}</strong>${escape(v)}</div>`).join('')}${s.months.length?`<table class="sprint-table"><caption>Месячный факт</caption><thead><tr><th>Месяц</th><th>Старт %</th><th>Конец %</th><th>Освоено SP</th></tr></thead><tbody>${s.months.map(m=>`<tr><td>${escape(m.month)}</td><td>${fmt(m.start)}</td><td>${fmt(m.end)}</td><td>${fmt(m.sp_utilized)}</td></tr>`).join('')}</tbody></table>`:''}<p class="text-block"><a href="https://pyrus.sovcombank.ru/t#id${s.id}" target="_blank" rel="noopener noreferrer">Открыть историю в Pyrus ↗</a></p>`;$('detail').showModal();}
- function openEpic(id){const activeModel=view==='errors'?errorModel:model,e=activeModel.epics.get(id);if(!e)return;$('detail-id').textContent=e.code||'Эпик';$('detail-body').innerHTML=`<h2 class="detail-title" id="detail-title">${escape(e.title)}</h2><p class="detail-path">${escape(e.project)}</p>${bar(e.pct,'Готовность эпика')}<p class="help">Готовность = освоенные SP / суммарные SP × 100%. STOP учитывается как завершённая работа в объёме освоенных SP. Фильтры и сворачивание строк расчёт не меняют.</p>${e.completionReason?`<p class="warning">${escape(e.completionReason)}</p>${(e.completionIssues||[]).map(t=>`<p class="help"><a href="https://pyrus.sovcombank.ru/t#id${encodeURIComponent(t.id)}" target="_blank" rel="noopener noreferrer">#${escape(t.id)} · ${escape(t.title)}</a> — ${escape(t.reason)}${t.stopped?' · STOP':''}</p>`).join('')}`:''}${e.titleMissing&&!e.missing?'<p class="warning">Название epic ещё не загружено. Выполните разовое заполнение названий из комплекта.</p>':''}<dl class="detail-grid">${row('Историй всего',e.completionTaskCount??e.stories.length)}${e.stoppedCount?row('Из них STOP',e.stoppedCount):''}${view==='map'?row('Историй по фильтрам',viewEpics.find(v=>v.id===id)?.visible.length??0):''}${row('SP эпика',fmt(e.sp))}${row('Освоено SP',fmt(e.used))}${row('Осталось SP',fmt(e.sp_undone))}${row('Начало',day(e.start))}${row('Завершение',day(e.end))}${row('Длительность, дней',durationDays(e))}${row('Код задачи эпика',e.reference)}</dl><p class="help">${escape(durationHint(e))}</p><p class="text-block">${escape(e.description||'')}</p>${I.detail(e,activeModel)}${/^\d+$/.test(id)?`<a href="https://pyrus.sovcombank.ru/t#id${id}" target="_blank" rel="noopener noreferrer">Открыть эпик в Pyrus ↗</a>`:''}`;$('detail').showModal();}
+ function openStory(id){const activeModel=view==='errors'?errorModel:isScrum()?statisticsModel:model,s=activeModel.stories.get(id);if(!s)return;const e=activeModel.epics.get(s.epic_id);$('detail-id').textContent='#'+s.id;$('detail-body').innerHTML=`<h2 class="detail-title" id="detail-title">${escape(s.title)}</h2><p class="detail-path">${escape(s.project)} → ${escape(e.title)}</p>${bar(s.pct,'Готовность истории')}${s.stopped?'<p class="help">STOP — работа остановлена. В Done учитывается как завершённая на 100% в объёме по последнему месячному проценту. Исходная оценка и месячная утилизация сохранены.</p>':''}<dl class="detail-grid">${row('Статус',s.status)}${row('Аналитик',s.ba||'—')}${row('Оценка SP',s.spEstimated===false?'Не заполнена — в расчётах 0 SP':fmt(s.sp))}${row('Последний месячный процент',percent(s.actualPct))}${s.stopped?row('Завершённый объём STOP, SP',fmt(s.completionSp)):row('Готовый объём, SP',fmt(s.readySp))}${row('Утилизация по месячной истории, SP',fmt(s.used))}${row('Начало анализа',day(s.start))}${row(s.stopped?'Переход в STOP':'Завершение',day(s.end))}${row('Длительность, дней',durationDays(s))}${row('Стейкхолдер',s.stakeholder||'—')}${row('Направление',s.facets.direction.join('; ')||'—')}${row('Стрим',s.stream||'—')}${row('Отдел',s.department||'—')}${row('Обновлено в Pyrus',date(s.modified_at))}</dl><p class="help">${escape(durationHint(s))}</p>${I.detail(s,activeModel)}${globalThis.UbaitAFCT.detail(s)}${s.issues.map(i=>`<p class="warning">${escape(i)}</p>`).join('')}${[['Я как…',s.i_as],['Хочу…',s.want],['Чтобы…',s.so_that]].filter(([,v])=>v).map(([k,v])=>`<div class="text-block"><strong>${k}</strong>${escape(v)}</div>`).join('')}${s.months.length?`<table class="sprint-table"><caption>Месячный факт</caption><thead><tr><th>Месяц</th><th>Старт %</th><th>Конец %</th><th>Освоено SP</th></tr></thead><tbody>${s.months.map(m=>`<tr><td>${escape(m.month)}</td><td>${fmt(m.start)}</td><td>${fmt(m.end)}</td><td>${fmt(m.sp_utilized)}</td></tr>`).join('')}</tbody></table>`:''}<p class="text-block"><a href="https://pyrus.sovcombank.ru/t#id${s.id}" target="_blank" rel="noopener noreferrer">Открыть историю в Pyrus ↗</a></p>`;$('detail').showModal();}
+ function completionDetails(e){
+  if(!e.stories.length)return '<p class="help">В эпике нет задач.</p>';
+  return `<table class="sprint-table completion-table"><caption>Задачи и вклад в готовность</caption><thead><tr><th>Задача</th><th>Статус</th><th>Последний %</th><th>Учтено SP</th><th>Готово SP</th></tr></thead><tbody>${e.stories.map(s=>`<tr><td><button class="text-button" data-completion-story="${escape(s.id)}">#${escape(s.id)} · ${escape(s.title)}</button></td><td>${escape(s.status)}</td><td>${percent(s.actualPct)}</td><td>${fmt(s.completionSp)}</td><td>${fmt(s.readySp)}</td></tr>`).join('')}</tbody></table>`;
+ }
+ function openEpic(id){const activeModel=view==='errors'?errorModel:model,e=activeModel.epics.get(id);if(!e)return;$('detail-id').textContent=e.code||'Эпик';$('detail-body').innerHTML=`<h2 class="detail-title" id="detail-title">${escape(e.title)}</h2><p class="detail-path">${escape(e.project)}</p>${bar(e.pct,'Готовность эпика')}<p class="help">Готовность = сумма готового объёма задач / сумма их объёма × 100%. Готовый объём задачи = оценка SP × последний месячный процент. Для STOP готовый объём считается всем завершённым объёмом. Месячная утилизация, фильтры и сворачивание строк этот расчёт не меняют.</p>${e.completionReason?`<p class="warning">${escape(e.completionReason)}</p>${(e.completionIssues||[]).map(t=>`<p class="help"><a href="https://pyrus.sovcombank.ru/t#id${encodeURIComponent(t.id)}" target="_blank" rel="noopener noreferrer">#${escape(t.id)} · ${escape(t.title)}</a> — ${escape(t.reason)}${t.stopped?' · STOP':''}</p>`).join('')}`:''}${e.titleMissing&&!e.missing?'<p class="warning">Название epic ещё не загружено. Выполните разовое заполнение названий из комплекта.</p>':''}<dl class="detail-grid">${row('Историй всего',e.completionTaskCount??e.stories.length)}${e.stoppedCount?row('Из них STOP',e.stoppedCount):''}${view==='map'?row('Историй по фильтрам',viewEpics.find(v=>v.id===id)?.visible.length??0):''}${row('Объём эпика, SP',fmt(e.sp))}${row('Готовый объём, SP',fmt(e.readySp))}${row('Утилизация по месячной истории, SP',fmt(e.used))}${row('Осталось SP',fmt(e.sp_undone))}${row('Начало',day(e.start))}${row('Завершение',day(e.end))}${row('Длительность, дней',durationDays(e))}${row('Код задачи эпика',e.reference)}</dl>${completionDetails(e)}<p class="help">${escape(durationHint(e))}</p><p class="text-block">${escape(e.description||'')}</p>${I.detail(e,activeModel)}${/^\d+$/.test(id)?`<a href="https://pyrus.sovcombank.ru/t#id${id}" target="_blank" rel="noopener noreferrer">Открыть эпик в Pyrus ↗</a>`:''}`;$('detail').showModal();}
+ function openProject(id){
+  const activeModel=view==='errors'?errorModel:model,p=activeModel.projects.find(p=>p.id===id);if(!p)return;
+  $('detail-id').textContent='Проект / инициатива';
+  $('detail-body').innerHTML=`<h2 class="detail-title" id="detail-title">${escape(p.title)}</h2>${bar(p.pct,'Готовность проекта')}<dl class="detail-grid">${row('Эпиков',p.epics.length)}${row('Историй',p.epics.reduce((n,e)=>n+e.stories.length,0))}${row('Объём, SP',fmt(p.sp))}${row('Готовый объём, SP',fmt(p.readySp))}${row('Начало анализа',day(p.start))}${row('Завершение',day(p.end))}${row('Длительность, дней',durationDays(p))}</dl><p class="help">${escape(durationHint(p))} Начало — самая ранняя дата начала анализа задач проекта; завершение — последняя дата Done или STOP, когда завершены все задачи.</p><table class="sprint-table completion-table"><caption>Эпики проекта</caption><thead><tr><th>Эпик</th><th>SP</th><th>Готовность</th><th>Дни</th></tr></thead><tbody>${p.epics.map(e=>`<tr><td><button class="text-button" data-completion-epic="${escape(e.id)}">${escape(e.title)}</button></td><td>${fmt(e.sp)}</td><td>${percent(e.pct)}</td><td>${fmt(e.maturity_days)}</td></tr>`).join('')}</tbody></table>${I.detail(p,activeModel)}`;
+  $('detail').showModal();
+ }
  async function load(){
   if(loading)return;loading=true;$('refresh').disabled=true;$('connection').textContent='Обновление…';$('loading-cover').hidden=!!model;$('story-map-panel').setAttribute('aria-busy','true');
   try{
@@ -663,7 +690,7 @@ globalThis.StoryMapModel=(()=>{
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&account.open){account.open=false;account.querySelector('summary').focus();e.preventDefault();}});
  sidebar.addEventListener('keydown',e=>{if(e.key==='Escape'&&sidebarGroup){const group=sidebarGroup;sidebarGroup='';updateSidebarMenu();$(group+'-tab').focus();e.preventDefault();}});
  $('app-tabs').addEventListener('scroll',positionSidebarMenu);window.addEventListener('resize',positionSidebarMenu);
- $('errors-view').addEventListener('click',e=>{const d=e.target.closest('button')?.dataset;if(!d)return;if(d.story)openStory(d.story);else if(d.epic)openEpic(d.epic);else if(d.errorMore){errorLimit+=60;renderOther();}});
+ $('errors-view').addEventListener('click',e=>{const d=e.target.closest('button')?.dataset;if(!d)return;if(d.story)openStory(d.story);else if(d.epic)openEpic(d.epic);else if(d.project)openProject(d.project);else if(d.errorMore){errorLimit+=60;renderOther();}});
  $('stats-controls').addEventListener('click',e=>{const d=e.target.closest('button')?.dataset;if(!d?.statsMetric||!model)return;statsState.metric=d.statsMetric;renderOther();});
  $('statistics-view').addEventListener('click',e=>{const button=e.target.closest('button'),d=button?.dataset;if(!d||!statsReport||button.disabled||!isScrum())return;
   if(d.statRow!==undefined){openStatisticsDetail(d.statRow);return;}
@@ -676,7 +703,7 @@ globalThis.StoryMapModel=(()=>{
   renderOther();
   for(const key of ['statsGroup','statsGrain','statPeriod'])if(d[key]!==undefined){const attr=key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase());for(const b of $('statistics-view').querySelectorAll('[data-'+attr+']'))if(b.dataset[key]===d[key]){b.focus({preventScroll:true});break;}}
  });
- $('detail-body').addEventListener('click',e=>{const d=e.target.closest('button')?.dataset;if(!d||!isScrum())return;if(d.statTask){openStory(d.statTask);$('detail-body').innerHTML='<button class="stat-back" data-stat-back="true">← К показателям и задачам</button>'+$('detail-body').innerHTML;$('detail-body').scrollTop=0;}else if(d.statMore)openStatisticsDetail(statsState.detailId,true);else if(d.statBack)openStatisticsDetail(statsState.detailId);});
+ $('detail-body').addEventListener('click',e=>{const d=e.target.closest('button')?.dataset;if(!d)return;if(d.completionEpic){openEpic(d.completionEpic);$('detail-body').scrollTop=0;return;}if(d.completionStory){openStory(d.completionStory);$('detail-body').scrollTop=0;return;}if(!isScrum())return;if(d.statTask){openStory(d.statTask);$('detail-body').innerHTML='<button class="stat-back" data-stat-back="true">← К показателям и задачам</button>'+$('detail-body').innerHTML;$('detail-body').scrollTop=0;}else if(d.statMore)openStatisticsDetail(statsState.detailId,true);else if(d.statBack)openStatisticsDetail(statsState.detailId);});
  $('search').addEventListener('input',e=>{state.search=e.target.value;clearTimeout(searchTimer);searchTimer=setTimeout(()=>{render(true);save();},180);});
  $('project-year').addEventListener('click',()=>openFilters('projectYear'));$('story-period').addEventListener('click',()=>openFilters('periods'));$('filters-button').addEventListener('click',()=>openFilters());
  $('cancel-filters').addEventListener('click',()=>$('filter-dialog').close());$('apply-filters').addEventListener('click',()=>{Object.assign(state,draft);$('filter-dialog').close();render(true);save();});$('reset-draft').addEventListener('click',()=>{draft=M.defaults();optionSearch='';renderFilters();});
