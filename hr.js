@@ -354,7 +354,7 @@ globalThis.UbaitHR=(()=>{
   }
   function employee(person,data,kind='employee'){
     const u={...person.unit,grade:calculatedGrade(person,data,kind).label},c=person.check;
-    return `<div class="hr-profile-grid"><section class="hr-card"><h3>Работа и команда</h3>${detailsRows([['Сотрудник',u.staff],['Статус',u.status],['Отдел · team',u.team],['Руководитель',u.chief],['Почта руководителя',u.chief_email],['Должность',u.position],['Грейд',u.grade],['Уровень управления',u.level],['Стримы',u.stream.join(' · ')],['Бизнес-опыт, лет',u.business_stage]])}</section><section class="hr-card"><h3>Контакты и рабочее место</h3>${detailsRows([['Почта',u.staff_email],['Телефон',u.phone],['Город',u.city],['Бизнес-центр',u.center],['Рабочее место',u.place],['День рождения',day(u.birthday)],['Фото',u.photo.length?'См. вложения ниже':'Нет вложения']])}${fileList(u.photo)}</section><section class="hr-card"><h3>Условия</h3>${detailsRows([['Оклад',null],['Справедливая стоимость',null],['Ожидания',fmt(u.expectations)],['Аура · исходное значение',u.aura],['Экспорт в BI',u.export_bi===null?'Не указано':u.export_bi?'Да':'Нет']],{hideSalary:true,compensation:person.compensation})}<span class="hr-prose-title">Оффер</span>${fileList(u.offer)}<p class="hr-source" style="margin-top:12px">Исходные значения из штатки. Валюта, период и состав выплат не выводятся из числа автоматически.</p></section><section class="hr-card"><h3>Даты и характеристика</h3><div class="hr-timeline">${[['Приём',u.date_in],['Перевод',u.date_transfer],['Увольнение',u.date_out]].map(([k,v])=>`<div><small>${k}</small><strong>${day(v)}</strong></div>`).join('')}</div>${prose('Характеристика',u.characteristic)}</section><section class="hr-card wide"><div class="hr-panel-top"><h3>Испытательный срок</h3>${pill('Окончание · '+day(c.check_end_date),u.status==='Испытательный срок'?'accent':'')}</div><p class="hr-prose">${esc(c.check_task||'Задача на испытательный срок не заполнена')}</p><div class="hr-check-grid">${[['Удалось',c.check_result_done],['Не удалось',c.check_result_fail],['Помогало',c.check_result_assist],['Мешало',c.check_result_disturb]].map(([k,v])=>`<div>${prose(k,v)}</div>`).join('')}</div>${prose('Обратная связь',c.check_feedback)}</section></div>`;
+    return `<div class="hr-profile-grid"><section class="hr-card"><h3>Работа и команда</h3>${detailsRows([['Сотрудник',u.staff],['Статус',u.status],['Отдел · team',u.team],['Руководитель',u.chief],['Почта руководителя',u.chief_email],['Должность',u.position],['Грейд',u.grade],['Уровень управления',u.level],['Стримы',u.stream.join(' · ')],['Бизнес-опыт, лет',u.business_stage]])}</section><section class="hr-card"><h3>Контакты и рабочее место</h3>${detailsRows([['Почта',u.staff_email],['Телефон',u.phone],['Город',u.city],['Бизнес-центр',u.center],['Рабочее место',u.place],['День рождения',day(u.birthday)],['Фото',u.photo.length?'См. вложения ниже':'Нет вложения']])}${fileList(u.photo)}</section><section class="hr-card"><h3>Условия</h3>${detailsRows([['Оклад',null],...(data.access?.can_manage_compensation===true?[['Справедливая стоимость',null]]:[]),['Ожидания',fmt(u.expectations)],['Аура · исходное значение',u.aura],['Экспорт в BI',u.export_bi===null?'Не указано':u.export_bi?'Да':'Нет']],{hideSalary:true,compensation:person.compensation})}<span class="hr-prose-title">Оффер</span>${fileList(u.offer)}<p class="hr-source" style="margin-top:12px">Исходные значения из штатки. Валюта, период и состав выплат не выводятся из числа автоматически.</p></section><section class="hr-card"><h3>Даты и характеристика</h3><div class="hr-timeline">${[['Приём',u.date_in],['Перевод',u.date_transfer],['Увольнение',u.date_out]].map(([k,v])=>`<div><small>${k}</small><strong>${day(v)}</strong></div>`).join('')}</div>${prose('Характеристика',u.characteristic)}</section><section class="hr-card wide"><div class="hr-panel-top"><h3>Испытательный срок</h3>${pill('Окончание · '+day(c.check_end_date),u.status==='Испытательный срок'?'accent':'')}</div><p class="hr-prose">${esc(c.check_task||'Задача на испытательный срок не заполнена')}</p><div class="hr-check-grid">${[['Удалось',c.check_result_done],['Не удалось',c.check_result_fail],['Помогало',c.check_result_assist],['Мешало',c.check_result_disturb]].map(([k,v])=>`<div>${prose(k,v)}</div>`).join('')}</div>${prose('Обратная связь',c.check_feedback)}</section></div>`;
   }
   function createSyncClient({fetchImpl=(...args)=>fetch(...args),onState=()=>{},onComplete=()=>{},onDenied=()=>{},schedule=setTimeout,cancel=clearTimeout}={}){
     let state={status:'idle'},pending=false,timer=null,completedId=null;
@@ -380,6 +380,29 @@ globalThis.UbaitHR=(()=>{
     return {start:()=>request(true),check:(quiet=false)=>request(false,quiet),state:()=>({...state})};
   }
   const syncText=s=>s.status==='requesting'?'Запускаем загрузку из Pyrus…':s.status==='running'?'Синхронизация HR с Pyrus… Можно продолжать работу.':s.status==='completed'?(s.warnings?'HR обновлён. Есть замечания загрузки — администратор увидит их в n8n.':'HR и история оценок обновлены · '+timestamp(s.finished_at)):s.status==='unconfirmed'?'Не удалось подтвердить завершение. Проверь данные кнопкой ↻; если они не обновились — выполнение флоу в n8n.':s.status==='disconnected'?'Не удалось получить статус. Нажми «Проверить синхронизацию».':'';
+  // Menu permissions load independently of employee views and compensation storage.
+  let menuAccess=null,accessRequest=null,accessVersion=0;
+  function updateMenuAccess(access){
+    menuAccess=access;accessVersion++;
+    const button=globalThis.document?.getElementById('hr-playground-tab');
+    if(button)button.hidden=access?.can_manage_compensation!==true;
+    globalThis.document?.getElementById('hr-navigation')?.dispatchEvent(new Event('hr-navigation-updated'));
+  }
+  function preloadAccess(){
+    if(accessRequest)return accessRequest;
+    const version=accessVersion;
+    accessRequest=(async()=>{
+      try{
+        const response=await fetch('/api/hr/access',{headers:{Accept:'application/json'},cache:'no-store',signal:AbortSignal.timeout(70000)});
+        if(globalThis.UbaitAuth)await UbaitAuth.checked(response);
+        if(!response.ok)throw new Error('HR access unavailable');
+        const result=await response.json();
+        if(result.access?.policy_version!==1)throw new Error('Invalid HR access');
+        if(version===accessVersion)updateMenuAccess(result.access);
+      }catch{if(version===accessVersion)updateMenuAccess(null);}
+      finally{accessRequest=null;}
+    })();return accessRequest;
+  }
   const reloaders=new WeakMap();
   const tabSetters=new WeakMap();
   function preload(root){
@@ -470,7 +493,7 @@ globalThis.UbaitHR=(()=>{
     let openedSkill=null,historyController=null;
     const cancelHistory=()=>{historyController?.abort();historyController=null;openedSkill=null;};
     const sync=createSyncClient({onState:paintSync,onComplete:async()=>{if(activeLoad)await activeLoad;await load({silent:true});},onDenied:()=>{
-      data=null;lastContent='';state.person='';state.reference='';denied=true;error='Доступ к HR изменился. Войди снова или обратись к администратору.';render();
+      data=null;updateMenuAccess(null);lastContent='';state.person='';state.reference='';denied=true;error='Доступ к HR изменился. Войди снова или обратись к администратору.';render();
     }});
     function paintSync(){
       const s=sync.state(),button=root.querySelector('#hr-push-sync'),message=root.querySelector('#hr-sync-state');
@@ -479,16 +502,16 @@ globalThis.UbaitHR=(()=>{
     }
     const state={tab:Object.hasOwn(tabs,root.dataset.hrSelectedTab)?root.dataset.hrSelectedTab:'competencies',person:'',query:'',department:'',status:'',kind:'employee',skillGroups:{employee:0,boss:0},reference:'',referenceManual:false,year:yearNow(),horizon:'',goalQuery:'',iprQuery:''};
     const navigation=globalThis.document?.getElementById('hr-navigation');
-    tabSetters.set(root,key=>{if(key==='playground'&&data?.access?.can_manage_compensation!==true)return;if(state.tab!==key){state.tab=key;render('hr-'+key+'-tab');}});
+    tabSetters.set(root,key=>{if(key==='playground'&&(data?.access||menuAccess)?.can_manage_compensation!==true)return;if(state.tab!==key){state.tab=key;render('hr-'+key+'-tab');}});
     const person=()=>data?.people.find(p=>p.unit.task_id===state.person);
     const filtered=()=>data.people.filter(p=>(!state.department||p.unit.team===state.department)&&(!state.status||p.unit.status===state.status)&&(!state.query||[title(p),p.unit.position,p.unit.team,p.unit.task_id].join(' ').toLocaleLowerCase('ru').includes(state.query.toLocaleLowerCase('ru'))));
     const spinner=()=>'<div class="hr-empty hr-loading" role="status"><span class="hr-spinner" aria-hidden="true"></span><h3>Загружаем штатные данные</h3><p>Сотрудники, компетенции, KPI и ИПР из БД</p></div>';
     function render(focusId,selection){
       cancelHistory();
       compUI.access(data?.access?.can_manage_compensation===true);
-      if(state.tab==='playground'&&data?.access?.can_manage_compensation!==true)state.tab='employee';
+      if(state.tab==='playground'&&(data?.access||menuAccess)?.can_manage_compensation!==true)state.tab='employee';
       root.dataset.hrSelectedTab=state.tab;
-      navigation?.querySelectorAll('[data-hr-tab]').forEach(button=>{button.hidden=button.dataset.hrTab==='playground'&&data?.access?.can_manage_compensation!==true;const active=button.dataset.hrTab===state.tab;button.setAttribute('aria-selected',String(active));button.setAttribute('tabindex',active?'0':'-1');});
+      navigation?.querySelectorAll('[data-hr-tab]').forEach(button=>{button.hidden=button.dataset.hrTab==='playground'&&(data?.access||menuAccess)?.can_manage_compensation!==true;const active=button.dataset.hrTab===state.tab;button.setAttribute('aria-selected',String(active));button.setAttribute('tabindex',active?'0':'-1');});
       const menuState=document.getElementById('hr-navigation-state'),menuRetry=document.getElementById('hr-navigation-retry');
       if(menuState){menuState.textContent=!data?(loading?'Загружаем разделы…':error?'Не удалось загрузить HR':''):'';menuState.hidden=!menuState.textContent;}
       if(menuRetry){menuRetry.hidden=Boolean(data)||loading||!error;menuRetry.disabled=loading;}
@@ -545,12 +568,12 @@ globalThis.UbaitHR=(()=>{
         if(!response.ok){denied=response.status===403;throw new Error(payload.error||'HR API: HTTP '+response.status+'.');}
         if(payload.access?.policy_version!==1)throw new Error('На сервере ещё не включены права HR. Загрузи обновление R8 целиком.');
         const loaded=parsePayload(payload),content=JSON.stringify([payload.access,payload.cards,payload.compensation_settings]);
-        changed=content!==lastContent;lastContent=content;data=loaded;compUI.hydrate(data);
+        changed=content!==lastContent;lastContent=content;data=loaded;updateMenuAccess(data.access);compUI.hydrate(data);
         if(!data.people.some(p=>p.unit.task_id===state.person)){
           state.person=data.access.employee_task_id;state.referenceManual=false;
         }
         if(state.reference&&!data.references.some(r=>r.unit.task_id===state.reference)){state.reference='';state.referenceManual=false;}
-      }catch(e){data=null;lastContent='';state.person='';state.reference='';error=e.name==='AbortError'?'HR не ответил за 70 секунд. Проверь выполнение флоу HR в n8n.':e.message;}
+      }catch(e){data=null;updateMenuAccess(null);lastContent='';state.person='';state.reference='';error=e.name==='AbortError'?'HR не ответил за 70 секунд. Проверь выполнение флоу HR в n8n.':e.message;}
       finally{clearTimeout(timer);loading=false;if(!background||changed||error)render();else paintSync();}
     }
     function skillDialog(code){
@@ -584,7 +607,7 @@ globalThis.UbaitHR=(()=>{
       try{const rows=await loadHistory(context.taskId,context.kind,context.code,{signal:controller.signal});
         if(current()){slot.innerHTML=skillHistory(rows,context.skill);context.historyLoaded=true;}
       }catch(e){if(current()){
-        if(e.status===401||e.status===403){data=null;lastContent='';state.person='';state.reference='';denied=true;error=e.message;render();}
+        if(e.status===401||e.status===403){data=null;updateMenuAccess(null);lastContent='';state.person='';state.reference='';denied=true;error=e.message;render();}
         else slot.innerHTML='<div class="hr-docs-error" role="status"><span>Не удалось загрузить историю оценок.</span><button class="action" data-hr-history-retry="true">Повторить</button></div>';
       }}finally{if(historyController===controller)historyController=null;}
     }
@@ -604,7 +627,7 @@ globalThis.UbaitHR=(()=>{
       if(d.hrIndexationOpen&&data.access?.can_export_indexation===true){indexation.open=true;indexation.message='';indexation.error=false;paintIndexation();root.querySelector('#hr-indexation-dialog')?.showModal();return;}
       if(d.hrIndexationClose){indexation.open=false;indexationController?.abort();root.querySelector('#hr-indexation-dialog')?.close();return;}
       if(d.hrIndexationSubmit){void generateIndexation();return;}
-      if(d.hrFair){const p=person(),value=root.querySelector('#hr-fair-value');if(!p||!value)return;const visible=button.getAttribute('aria-pressed')!=='true';value.textContent=visible?fmt(p.compensation?.fair_cost):'••••••';value.setAttribute('aria-label',visible?'Справедливая стоимость':'Справедливая стоимость скрыта');button.setAttribute('aria-pressed',String(visible));button.setAttribute('aria-label',visible?'Скрыть справедливую стоимость':'Показать справедливую стоимость');button.title=visible?'Скрыть справедливую стоимость':'Показать справедливую стоимость';button.innerHTML=salaryIcons[visible?'hide':'show'];return;}
+      if(d.hrFair){if(data.access?.can_manage_compensation!==true)return;const p=person(),value=root.querySelector('#hr-fair-value');if(!p||!value)return;const visible=button.getAttribute('aria-pressed')!=='true';value.textContent=visible?fmt(p.compensation?.fair_cost):'••••••';value.setAttribute('aria-label',visible?'Справедливая стоимость':'Справедливая стоимость скрыта');button.setAttribute('aria-pressed',String(visible));button.setAttribute('aria-label',visible?'Скрыть справедливую стоимость':'Показать справедливую стоимость');button.title=visible?'Скрыть справедливую стоимость':'Показать справедливую стоимость';button.innerHTML=salaryIcons[visible?'hide':'show'];return;}
       if(d.hrPayrollClose){closePayroll();return;}
       if(d.hrPayrollOpen&&data.access?.can_export_kpi===true){if(!payroll.busy){Object.assign(payroll,lastCompletedQuarter(),{message:'',error:false});const input=root.querySelector('#hr-payroll-year');if(input)input.value=payroll.year;}payroll.open=true;paintPayroll();root.querySelector('#hr-payroll-dialog')?.showModal();return;}
       if(d.hrPayrollQuarter&&!payroll.busy){const q=Number(d.hrPayrollQuarter);if(q>=1&&q<=4)payroll.quarter=q;paintPayroll();return;}
@@ -646,5 +669,5 @@ globalThis.UbaitHR=(()=>{
     }
     void load().then(()=>{if(data)void sync.check(true);});
   }
-  return {mount,preload,selectTab,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,calculatedGrade,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading,parseSkillHistory,createHistoryLoader,skillHistoryChart,skillHistory,createSyncClient,lastCompletedQuarter,requestKpiExport};
+  return {mount,preload,preloadAccess,selectTab,parsePayload,matchEmployee,comparison,countSkills,goalSummary,gradeIndex,gradePoints,scoreProfile,calculatedGrade,development,developmentSummary,gapsDetail,radarAxes,radar,iprSkillCode,skillEvidence,scale,definitions,competencies,kpi,ipr,employee,defaultReference,referenceLabel,referenceMarkdown,descriptionBlocks,competencyGuide,createDocsLoader,skillProfile,skillScale,docsLoading,parseSkillHistory,createHistoryLoader,skillHistoryChart,skillHistory,createSyncClient,lastCompletedQuarter,requestKpiExport};
 })();

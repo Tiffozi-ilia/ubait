@@ -1,21 +1,21 @@
 /* Read-only error rules. No fetches, writes or automatic corrections.
  * pct is the latest monthly sprint_m_end, NOT a sum of SP or quarter plans.
- * A task may appear in several columns. STOP/Trash are deliberately included.
+ * STOP is completed work. Trash never participates in diagnostics.
  */
 globalThis.StoryMapErrors = (() => {
   const rules = [
-    {id:'work-status', title:'Работа без статуса', description:'Текущий процент утилизации > 0% и < 100%, но статус не WIP. Включая STOP и Trash.',
-      test:s=>s.pct!==null&&s.pct>0&&s.pct<100&&s.lane!=='wip',
+    {id:'work-status', title:'Работа без статуса', description:'Утилизация больше 0% и меньше 100%, но статус не WIP и не STOP. STOP считается завершением работы и не является ошибкой.',
+      test:s=>s.pct!==null&&s.pct>0&&s.pct<100&&s.lane!=='wip'&&String(s.status).trim().toLowerCase()!=='stop',
       reason:s=>`Утилизация ${s.pct}% · Статус: ${s.status||'не указан'}`},
-    {id:'complete-status', title:'100%, но не Done', description:'Текущий процент утилизации = 100%, а статус не Done.',
-      test:s=>s.pct===100&&s.lane!=='done', reason:s=>`Утилизация 100% · Статус: ${s.status||'не указан'}`},
+    {id:'complete-status', title:'100%, но не завершена', description:'Утилизация равна 100%, но статус не Done и не STOP.',
+      test:s=>s.pct===100&&s.lane!=='done'&&String(s.status).trim().toLowerCase()!=='stop', reason:s=>`Утилизация 100% · Статус: ${s.status||'не указан'}`},
     {id:'done-incomplete', title:'Done, но не 100%', description:'Статус Done, а текущая утилизация не равна 100% или не указана.',
       test:s=>s.lane==='done'&&s.pct!==100, reason:s=>s.pct===null?'Статус Done · Нет месячного факта':`Статус Done · Утилизация ${s.pct}%`},
     {id:'no-epic', title:'WIP без Эпика', description:'Задача в работе, но ссылка на эпик не заполнена.',
       test:s=>s.lane==='wip'&&s.epic_id==='unassigned', reason:s=>`Статус: ${s.status} · Эпик не указан`},
     {id:'no-project', title:'Эпик без Проекта', description:'К эпику не привязан проект. В карточках этого столбца — эпики, а не задачи.', epic:true},
-    {id:'no-sp', title:'Без SP', description:'Задача в WIP, но оценка SP не заполнена. Нулевая оценка не считается отсутствующей.',
-      test:s=>s.lane==='wip'&&s.sp===null, reason:s=>`Статус: ${s.status} · SP не рассчитан`},
+    {id:'no-sp', title:'Без SP', description:'Задача в WIP, но оценка SP не заполнена. В расчётах отсутствие оценки даёт 0 SP. Явно указанная оценка 0 отличается от незаполненной.',
+      test:s=>s.lane==='wip'&&(s.spEstimated===false||s.sp===null), reason:s=>`Статус: ${s.status} · ${s.spEstimated===false?'Оценка SP не заполнена · в расчётах 0 SP':'SP не рассчитан'}`},
   ];
   const worked=m=>globalThis.StoryMapModel.positive(m)||(/^\d{4}\.(0[1-9]|1[0-2])$/.test(m.month)&&m.start!==null&&m.end!==null&&m.end>m.start);
   function evaluate(model,input={}) {
@@ -31,7 +31,7 @@ globalThis.StoryMapErrors = (() => {
       return M.cutMatches(s,f)&&(!f.search||s.search.includes(f.search.trim().toLocaleLowerCase('ru')))
         &&(!f.periods.length||(f.exclude?.periods?!periodHit:periodHit));
     };
-    const eligible=[...model.stories.values()].filter(s=>readiness(s.project_key||s.project,model.epics.get(s.epic_id))&&byYear(!s.initiative_key&&s.project==='Без проекта'?ownYears([s]):projectYears.get(s.project_key||s.project)||new Set())&&common(s));
+    const eligible=[...model.stories.values()].filter(s=>String(s.status).trim().toLowerCase()!=='trash'&&readiness(s.project_key||s.project,model.epics.get(s.epic_id))&&byYear(!s.initiative_key&&s.project==='Без проекта'?ownYears([s]):projectYears.get(s.project_key||s.project)||new Set())&&common(s));
     const columns=rules.map(rule=>({id:rule.id,title:rule.title,description:rule.description,epic:!!rule.epic,items:[]}));
     for(let i=0;i<rules.length;i++){
       const rule=rules[i];

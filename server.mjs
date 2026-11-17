@@ -100,7 +100,7 @@ export function createCompetencyDocs({fetchImpl=fetch,now=Date.now,timeoutMs=600
   };
 }
 
-export const BUILD_VERSION='2026.11.16-v2.11.0';
+export const BUILD_VERSION='2026.11.17-v2.11.2';
 
 // Shared in-flight sync. Browsers poll this small status instead of holding an HTTP request open.
 export function createHrSync({webhookUrl,webhookSecret,fetchImpl=fetch,now=Date.now,invalidate=()=>{},timeoutMs=900000}){
@@ -366,6 +366,11 @@ export function createStoryMapServer({webhookUrl=process.env.STORY_MAP_WEBHOOK_U
         const body=scopeSkillHistory(await skillHistory(taskId,kind,matrixId),card,kind,matrixId);
         res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
         return res.end(req.method==='HEAD'?undefined:JSON.stringify(body));
+      }
+      if(url.pathname==='/api/hr/access'){
+        res.setHeader('Vary','Cookie');
+        const scoped=authorizeHr(JSON.parse(await hrUpstream()),user);
+        return json(200,{access:scoped.access});
       }
       if(url.pathname==='/api/hr'){
         res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');
