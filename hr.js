@@ -434,6 +434,7 @@ globalThis.UbaitHR=(()=>{
     if(root.dataset.hrMounted==='true'){void reloaders.get(root)?.();return;}
     root.dataset.hrMounted='true';
     let data=null,loading=false,error='',denied=false,lastContent='',activeLoad=null;
+    let renderedData=null,deferredRender=false;
     const payroll={...lastCompletedQuarter(),open:false,busy:false,message:'',error:false};
     let payrollController=null;
     function closePayroll(){payroll.open=false;payrollController?.abort();root.querySelector('#hr-payroll-dialog')?.close();}
@@ -506,7 +507,23 @@ globalThis.UbaitHR=(()=>{
     const person=()=>data?.people.find(p=>p.unit.task_id===state.person);
     const filtered=()=>data.people.filter(p=>(!state.department||p.unit.team===state.department)&&(!state.status||p.unit.status===state.status)&&(!state.query||[title(p),p.unit.position,p.unit.team,p.unit.task_id].join(' ').toLocaleLowerCase('ru').includes(state.query.toLocaleLowerCase('ru'))));
     const spinner=()=>'<div class="hr-empty hr-loading" role="status"><span class="hr-spinner" aria-hidden="true"></span><h3>Загружаем штатные данные</h3><p>Сотрудники, компетенции, KPI и ИПР из БД</p></div>';
-    function render(focusId,selection){
+    function canRetainSkillDialog(){
+      if(!data||!renderedData||!root.querySelector('#hr-skill-dialog')?.open)return false;
+      if(JSON.stringify(data.access)!==JSON.stringify(renderedData.access))return false;
+      const latest=new Map(data.cards.map(card=>[card.unit.task_id,card.unit]));
+      // A refresh may update scores, but must not retain records removed from the
+      // authorized response, reassigned to another person, or newly redacted.
+      const identity=['staff_id','staff','is_reference','chief_id','chief','chief_email'];
+      return renderedData.cards.every(card=>{
+        const unit=latest.get(card.unit.task_id);
+        return unit&&identity.every(key=>(card.unit[key]??null)===(unit[key]??null));
+      });
+    }
+    function render(focusId,selection,{preserveSkillDialog=false}={}){
+      // Keep the native dialog and its in-flight description/history intact.
+      // The latest authorized snapshot is rendered when the reader closes it.
+      if(preserveSkillDialog&&canRetainSkillDialog()){deferredRender=true;paintSync();return;}
+      deferredRender=false;renderedData=data;
       cancelHistory();
       compUI.access(data?.access?.can_manage_compensation===true);
       if(state.tab==='playground'&&(data?.access||menuAccess)?.can_manage_compensation!==true)state.tab='employee';
@@ -537,7 +554,20 @@ globalThis.UbaitHR=(()=>{
         '<section id="hr-tab-content" class="hr-content" role="tabpanel" aria-labelledby="hr-'+state.tab+'-tab">'+
         (!p?'<div class="hr-empty"><h3>Сотрудник не выбран</h3><p>Измени поиск или фильтры отдела и статуса. В списке только доступные тебе карточки.</p></div>':missing+same+(state.tab==='competencies'?competencies(p,data,state):state.tab==='kpi'?kpi(p,state):state.tab==='ipr'?ipr(p,state):employee(p,data,state.kind)))+
         '</section></div></div>')+'<dialog id="hr-skill-dialog" class="hr-dialog" aria-labelledby="hr-skill-title"><div class="dialog-top"><span class="hr-source" id="hr-dialog-label">Профиль навыка</span><button class="action" data-hr-close="true">Закрыть</button></div><div class="detail-body" id="hr-skill-body"></div></dialog>'+(data.access?.can_export_kpi===true?payrollDialog():'')+(data.access?.can_export_indexation===true?indexationDialog():'');
-      root.querySelector('#hr-skill-dialog')?.addEventListener?.('close',cancelHistory);
+      const skillModal=root.querySelector('#hr-skill-dialog');
+      skillModal?.addEventListener?.('close',()=>{
+        if(root.querySelector('#hr-skill-dialog')!==skillModal||skillModal.open)return;
+        const focus=openedSkill?'[data-hr-skill="'+openedSkill.code+'"]':'[data-hr-gaps]';
+        cancelHistory();
+        if(deferredRender){
+          const scroll=['#hr-tab-content','.hr-directory-list'].map(selector=>{
+            const el=root.querySelector(selector);return {selector,top:el?.scrollTop??0,left:el?.scrollLeft??0};
+          });
+          render();
+          root.querySelector(focus)?.focus({preventScroll:true});
+          for(const {selector,top,left}of scroll){const el=root.querySelector(selector);if(el){el.scrollTop=top;el.scrollLeft=left;}}
+        }
+      });
       paintSync();
       const payrollModal=root.querySelector('#hr-payroll-dialog');
       if(payrollModal){payrollModal.addEventListener('cancel',()=>{payroll.open=false;payrollController?.abort();});if(payroll.open)payrollModal.showModal();paintPayroll();}
@@ -559,7 +589,7 @@ globalThis.UbaitHR=(()=>{
     }
     async function loadData({silent=false}={}){
       if(loading)return;loading=true;error='';denied=false;
-      const background=silent&&Boolean(data);let changed=true;if(!background)render();
+      const background=silent&&Boolean(data);let changed=true;if(!background)render(undefined,undefined,{preserveSkillDialog:true});
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),70000);
       try{
         const response=await fetch('/api/hr',{headers:{Accept:'application/json'},cache:'no-store',signal:controller.signal});
@@ -574,7 +604,7 @@ globalThis.UbaitHR=(()=>{
         }
         if(state.reference&&!data.references.some(r=>r.unit.task_id===state.reference)){state.reference='';state.referenceManual=false;}
       }catch(e){data=null;updateMenuAccess(null);lastContent='';state.person='';state.reference='';error=e.name==='AbortError'?'HR не ответил за 70 секунд. Проверь выполнение флоу HR в n8n.':e.message;}
-      finally{clearTimeout(timer);loading=false;if(!background||changed||error)render();else paintSync();}
+      finally{clearTimeout(timer);loading=false;if(!background||changed||error)render(undefined,undefined,{preserveSkillDialog:true});else paintSync();}
     }
     function skillDialog(code){
       const p=person(),skill=skillProfile(p,data,state.kind,code);if(!skill)return;
@@ -639,7 +669,7 @@ globalThis.UbaitHR=(()=>{
         button.setAttribute('aria-pressed',String(visible));button.setAttribute('aria-label',visible?'Скрыть оклад':'Показать оклад');button.title=visible?'Скрыть оклад':'Показать оклад';button.innerHTML=salaryIcons[visible?'hide':'show'];return;
       }
       if(d.hrSync){if(sync.state().status==='disconnected')void sync.check();else void sync.start();return;}
-      if(d.hrClose){cancelHistory();root.querySelector('#hr-skill-dialog').close();return;}
+      if(d.hrClose){root.querySelector('#hr-skill-dialog').close();return;}
       if(d.hrSkillTab){selectSkillTab(d.hrSkillTab);return;}
       if(d.hrHistoryRetry){void showHistory();return;}
       if(d.hrDocsRetry){void showDocs(d.hrDocsRetry);return;}
