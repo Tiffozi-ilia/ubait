@@ -29,6 +29,26 @@ const frac=n=>{const str=String(n).toLowerCase(),[mant,exp='0']=str.split('e'),n
 const add=(x,y)=>[x[0]*y[1]+y[0]*x[1],x[1]*y[1]],mul=(x,y)=>[x[0]*y[0],x[1]*y[1]],div=(x,y)=>[x[0]*y[1],x[1]*y[0]];
 const cents=x=>{const sign=x[0]<0n?-1n:1n,a=(x[0]<0n?-x[0]:x[0])*100n,q=(a*2n+x[1])/(2n*x[1])*sign;if(q>BigInt(Number.MAX_SAFE_INTEGER)||q<BigInt(-Number.MAX_SAFE_INTEGER))throw new Error('Сумма вне допустимого диапазона');return Number(q);};
 const roundMoney=n=>cents(frac(n))/100;
+// Two editor views of the same persisted transition model. Switching views never
+// rewrites the model; conversion back is needed only after an actual input edit.
+function relativeCoefficients(steps){
+ if(!Array.isArray(steps)||steps.length!==3||!steps.every(n=>Number.isFinite(n)&&n>=0))throw new Error('Введите три коэффициента не меньше нуля.');
+ let product=[1n,1n];
+ return steps.map(n=>{product=mul(product,frac(n));const value=Number(product[0])/Number(product[1]);if(!Number.isFinite(value)||(product[0]>0n&&value===0))throw new Error('Коэффициенты вне допустимого диапазона.');return value;});
+}
+function transitionCoefficients(relative,previous=[1,1,1]){
+ if(!Array.isArray(relative)||relative.length!==3||!relative.every(n=>Number.isFinite(n)&&n>=0))throw new Error('Введите три коэффициента не меньше нуля.');
+ const old=relativeCoefficients(previous);
+ return relative.map((n,i)=>{
+  const before=i?relative[i-1]:1;
+  if(before===0&&n>0)throw new Error('После нулевого коэффициента нельзя получить положительный множитель переходом. Укажите для предыдущего грейда коэффициент больше нуля.');
+  if(n===old[i]&&before===(i?old[i-1]:1))return previous[i];
+  if(before===0)return previous[i]; // 0 × any factor = 0: retain the saved transition.
+  const value=n/before;
+  if(!Number.isFinite(value)||(n>0&&value===0))throw new Error('Коэффициенты вне допустимого диапазона.');
+  return value;
+ });
+}
 function appliedCoefficients(score,thresholds,k){
  return k.filter((_,i)=>score>=thresholds[i+1]);
 }
@@ -77,6 +97,6 @@ function analyze(cards,source,saved){
  const totalCents=ready.reduce((sum,r)=>sum+BigInt(Math.round(r.value.indexation*100)),0n);
  return {rows,ready,excluded,summary:{employees:working.length,calculated:ready.length,positive:ready.filter(r=>r.value.indexation>0).length,indexation:totalCents<=BigInt(Number.MAX_SAFE_INTEGER)?Number(totalCents)/100:null,excluded:excluded.length}};
 }
-const api={formulaVersion,defaultModel,number,validateModel,references,roundMoney,appliedCoefficients,cost,fairCost,calculate,analyze,reasons};
+const api={formulaVersion,defaultModel,number,validateModel,references,roundMoney,relativeCoefficients,transitionCoefficients,appliedCoefficients,cost,fairCost,calculate,analyze,reasons};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.UbaitCompensation=api;
 })(globalThis);
