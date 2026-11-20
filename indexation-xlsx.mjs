@@ -17,27 +17,56 @@ function zip(files){
  const end=Buffer.alloc(22),dirs=Buffer.concat(directory);end.writeUInt32LE(0x06054b50);end.writeUInt16LE(Object.keys(files).length,8);end.writeUInt16LE(Object.keys(files).length,10);end.writeUInt32LE(dirs.length,12);end.writeUInt32LE(offset,16);
  return Buffer.concat([...data,dirs,end]);
 }
-function sheet(headers,rows,widths,moneyColumns=[],totalRow=-1){
- const data=[headers,...rows].map((row,ri)=>'<row r="'+(ri+1)+'"'+(ri===0?' ht="32" customHeight="1"':'')+'>'+row.map((v,ci)=>{
-  const style=ri===0?1:ri===totalRow?4:moneyColumns.includes(ci)?2:3,at=col(ci)+(ri+1);
+function sheet(headers,rows,widths,moneyColumns=[],totalRow=-1,percentColumns=[],rowHeights={}){
+ const data=[headers,...rows].map((row,ri)=>'<row r="'+(ri+1)+'"'+(ri===0?' ht="32" customHeight="1"':rowHeights[ri]?' ht="'+rowHeights[ri]+'" customHeight="1"':'')+'>'+row.map((v,ci)=>{
+  const style=ri===0?1:ri===totalRow?(percentColumns.includes(ci)?6:moneyColumns.includes(ci)?4:7):percentColumns.includes(ci)?5:moneyColumns.includes(ci)?2:3,at=col(ci)+(ri+1);
   return typeof v==='number'&&Number.isFinite(v)?`<c r="${at}" s="${style}" t="n"><v>${v}</v></c>`:`<c r="${at}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xml(v)}</t></is></c>`;
  }).join('')+'</row>').join('');
  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:${col(headers.length-1)}${rows.length+1}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="24"/><cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${data}</sheetData><autoFilter ref="A1:${col(headers.length-1)}${Math.max(1,totalRow>0?totalRow:rows.length+1)}"/><pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.2" footer="0.2"/></worksheet>`;
 }
-const styles=`<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.00"/></numFmts><fonts count="2"><font><sz val="11"/><color rgb="FF26323B"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF7060A8"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="164" fontId="1" fillId="2" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+const styles=`<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0.00"/><numFmt numFmtId="165" formatCode="0.00%"/></numFmts><fonts count="2"><font><sz val="11"/><color rgb="FF26323B"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF7060A8"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="8"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="164" fontId="1" fillId="2" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="1" fillId="2" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 export function indexationXlsx({analysis,source,saved,generated_at,hr_generated_at}){
  const labels={employee:'БА',boss:'Руководитель'};
- const rows=analysis.ready.map(({card:c,value:v})=>[c.unit.staff,c.unit.task_id,c.unit.team,c.unit.position,labels[v.track],v.score,v.grade,C.number(c.unit.cost),v.fair_cost,v.indexation,v.cost_after,'https://pyrus.sovcombank.ru/t#id'+c.unit.task_id]);
+ const percent=rate=>rate.percent===null?'—':rate.percent/100;
+ const rate=C.indexationRate(analysis.rows);
+ const sum=(items,get)=>{
+  if(!items.length)return null;
+  const cents=items.reduce((n,row)=>n+BigInt(Math.round(C.roundMoney(get(row))*100)),0n);
+  if(cents>BigInt(Number.MAX_SAFE_INTEGER))throw new Error('Сумма для реестра слишком велика.');
+  return Number(cents)/100;
+ };
+ const totals=items=>{
+  const ready=items.filter(row=>row.value.indexation_status==='ready');
+  return [sum(ready,r=>C.number(r.card.unit.cost)),sum(ready,r=>r.value.fair_cost),sum(ready,r=>r.value.indexation)];
+ };
+ const rows=analysis.ready.map(row=>{
+  const {card:c,value:v}=row,personalRate=C.indexationRate([row]);
+  return [c.unit.staff,c.unit.task_id,c.unit.team,c.unit.position,labels[v.track],v.score,v.grade,C.number(c.unit.cost),v.fair_cost,v.indexation,percent(personalRate),v.cost_after,'https://pyrus.sovcombank.ru/t#id'+c.unit.task_id,personalRate.reason];
+ });
  const total=analysis.summary.indexation;if(total===null)throw new Error('Сумма индексации слишком велика.');
- rows.push(['Итого','','','','','','','','',total,'','']);
+ const [salaryTotal,fairTotal]=totals(analysis.rows);
+ rows.push(['Итого по управлению','','','','','','',salaryTotal,fairTotal,total,percent(rate),'','',rate.reason]);
+ const groups=new Map();
+ for(const row of analysis.rows){const department=String(row.card.unit.team||'').trim()||'Отдел не указан';if(!groups.has(department))groups.set(department,[]);groups.get(department).push(row);}
+ const summaryRow=(title,items)=>{const result=C.indexationRate(items);return [title,items.length,result.calculated,...totals(items),percent(result),result.reason];};
+ const summary=[...groups].sort(([a],[b])=>a.localeCompare(b,'ru')).map(([name,items])=>summaryRow(name,items));
+ summary.push(summaryRow('Итого по управлению',analysis.rows));
  const excluded=analysis.excluded.map(({card:c,value:v})=>[c.unit.staff,c.unit.task_id,c.unit.team,v.reason||v.indexation_status,`${v.assessed} / ${v.count}`]);
  const model=[['Дата формирования',generated_at],['Срез HR',hr_generated_at],['Версия модели',saved.revision],['Версия формулы',saved.formula_version],['Расчёт стоимости','База × max(1, AS IS / баллы Юнлинга) × произведение коэффициентов достигнутых переходов'],['Переходы','Коэффициент включается целиком при достижении баллов следующего эталона; предыдущие коэффициенты сохраняются'],['Источник базы БА','Эталон Юнлинг · #'+source.base_task_id],['База БА',source.base],['Коэффициент базы руководителя',saved.model.management_base_multiplier],['База руководителя',source.base===null?null:source.base*saved.model.management_base_multiplier],['Округление','До 2 знаков; сначала стоимость, затем индексация; половина копейки вверх'],['Область','Все доступные руководителю сотрудники со статусом «Работает»'],['Сотрудников',analysis.summary.employees],['Рассчитано',analysis.summary.calculated],['С положительной индексацией',analysis.summary.positive],['Итого индексация',total],['Не рассчитано',analysis.summary.excluded]];
  for(const kind of ['employee','boss']){
   source.tracks[kind].bands.forEach(b=>model.push([labels[kind]+' · порог '+b.grade,b.score]));
   saved.model.growth[kind].forEach((k,i)=>model.push([labels[kind]+' · '+['Юнлинг → Падаван','Падаван → Джедай','Джедай → Магистр'][i],k]));
  }
- const titles=['Индексация','Не рассчитано','Модель'];
- const sheets=[sheet(['ФИО','ID HR-карточки','Подразделение','Должность','Трек','AS IS','Грейд','Текущий оклад','Справедливая стоимость','Индексация','Оклад после индексации','Pyrus'],rows,[36,18,22,25,19,12,24,20,23,20,25,50],[7,8,9,10],rows.length),sheet(['ФИО','ID HR-карточки','Подразделение','Причина','Оценено'],excluded,[36,18,22,65,15]),sheet(['Параметр','Значение'],model,[52,85])];
+ const methodStart=model.length;
+ model.push(['Процент индексации','max(0, (справедливая стоимость / текущий оклад − 1) × 100). Для отдела и управления используются суммы стоимости и окладов.'],['Неполные данные','В обе суммы входят одни и те же сотрудники с рассчитанной стоимостью и корректным окладом. Покрытие и причины указаны в сводке.'],['Нулевой оклад','При положительной стоимости процент не определён (—). Если стоимость и оклад равны нулю, процент равен 0%.'],['Сумма и процент','Рубли — сумма положительных индексаций сотрудников. Общий процент может быть 0%, даже если отдельным сотрудникам нужна прибавка.']);
+ const titles=['Индексация','Сводка','Не рассчитано','Модель'];
+ const heights=(items,column)=>Object.fromEntries(items.map((row,i)=>[i+1,String(row[column]||'').length>110?44:24]));
+ const sheets=[
+  sheet(['ФИО','ID HR-карточки','Подразделение','Должность','Трек','AS IS','Грейд','Текущий оклад','Справедливая стоимость','Индексация','Индексация, %','Оклад после индексации','Pyrus','Примечание'],rows,[36,18,22,25,19,12,24,20,23,20,18,25,50,70],[7,8,9,11],rows.length,[10],heights(rows,13)),
+  sheet(['Подразделение','Сотрудников','Рассчитано','Текущие оклады, ₽','Справедливая стоимость, ₽','Индексация, ₽','Индексация, %','Примечание'],summary,[30,16,16,23,27,22,18,70],[3,4,5],summary.length,[6],heights(summary,7)),
+  sheet(['ФИО','ID HR-карточки','Подразделение','Причина','Оценено'],excluded,[36,18,22,65,15]),
+  sheet(['Параметр','Значение'],model,[52,85],[],-1,[],Object.fromEntries(model.slice(methodStart).map((_,i)=>[methodStart+i+1,44])))
+ ];
  const files={
  '[Content_Types].xml':`<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${titles.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`,
  '_rels/.rels':'<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
