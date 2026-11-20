@@ -12,7 +12,12 @@ const moneyIcon='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V14M4
 const chevron=open=>'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="'+(open?'m4 6 4 4 4-4':'m6 4 4 4-4 4')+'"/></svg>';
 const normalize=v=>String(v??'').trim().toLocaleLowerCase('ru').replace(/ё/g,'е');
 const department=c=>String(c.unit.team||'').trim()||'Отдел не указан';
-const summarize=rows=>{const ready=rows.filter(r=>r.value.indexation_status==='ready'),cents=ready.reduce((s,r)=>s+BigInt(Math.round(r.value.indexation*100)),0n);return {employees:rows.length,calculated:ready.length,positive:ready.filter(r=>r.value.indexation>0).length,total:ready.length&&cents<=BigInt(Number.MAX_SAFE_INTEGER)?Number(cents)/100:null};};
+const summarize=rows=>{const ready=rows.filter(r=>r.value.indexation_status==='ready'),cents=ready.reduce((s,r)=>s+BigInt(Math.round(r.value.indexation*100)),0n);return {employees:rows.length,calculated:ready.length,positive:ready.filter(r=>r.value.indexation>0).length,total:ready.length&&cents<=BigInt(Number.MAX_SAFE_INTEGER)?Number(cents)/100:null,rate:C.indexationRate(rows)};};
+const rateHTML=(rate,label)=>{
+ const value=rate.percent===null?'—':fmt(rate.percent)+'%'+(rate.partial?'*':'');
+ const formula='max(0, (справедливая стоимость / текущий оклад − 1) × 100). Для группы берутся суммы стоимости и окладов.';
+ return '<span class="comp-indexation-rate'+(rate.percent>0?' comp-increase':'')+'" aria-label="'+esc('Индексация '+label+': '+value)+'" title="'+esc(rate.reason?rate.reason+' '+formula:formula)+'">'+value+'</span>';
+};
 function create({root,onSaved=()=>{},onDenied=()=>{},fetchImpl=(...args)=>fetch(...args),notify=()=>{}}){
  let ctx=null,draft=C.defaultModel(),baseline=JSON.stringify(draft),expected=0,loading=false,saving=false,error='',conflict=false,filter='all',query='',enabled=false,generation=0,hydrationRevision=0,pending=null;
  let grouped=true,sort='delta-desc',settingsOpen=false,selected='',collapsed=new Set();
@@ -98,21 +103,21 @@ function create({root,onSaved=()=>{},onDenied=()=>{},fetchImpl=(...args)=>fetch(
   const cell=(label,value,cl='')=>'<td data-label="'+label+'" class="'+cl+'">'+value+'</td>';
   const name='<button class="comp-person-name" type="button" data-comp-action="person" data-comp-id="'+esc(c.unit.task_id)+'" aria-expanded="'+open+'" aria-controls="comp-detail-'+esc(c.unit.task_id)+'">'+esc(c.unit.staff||'Без имени')+'</button><small>'+esc([!grouped?department(c):'',tracks[v.track]||'Уровень не указан',v.score!==null?fmt(v.score)+' б.':''].filter(Boolean).join(' · '))+'</small>'+(v.reason?'<span class="comp-row-reason">'+esc(v.reason)+'</span>':'');
   const fair='<strong>'+fmt(v.fair_cost)+'</strong>'+(changed?'<small>Сохранено: '+fmt(prior.fair_cost)+'</small>':'');
-  return '<tr data-comp-person="'+esc(c.unit.task_id)+'"'+(open?' class="comp-person-open"':'')+'>'+cell('Сотрудник',name,'comp-person')+cell('Грейд',esc(v.grade||'—'))+cell('Оклад',fmt(C.number(c.unit.cost)),'comp-number')+cell('Стоимость',fair,'comp-number comp-fair')+cell('Индексация','<strong>'+(v.indexation>0?'+':'')+fmt(v.indexation)+'</strong>','comp-number'+(v.indexation>0?' comp-increase':''))+'</tr><tr id="comp-detail-'+esc(c.unit.task_id)+'" class="comp-detail-row" '+(open?'':'hidden')+'><td colspan="5">'+(open?detailHTML(c,v,r):'')+'</td></tr>';
+  return '<tr data-comp-person="'+esc(c.unit.task_id)+'"'+(open?' class="comp-person-open"':'')+'>'+cell('Сотрудник',name,'comp-person')+cell('Грейд',esc(v.grade||'—'))+cell('Оклад',fmt(C.number(c.unit.cost)),'comp-number')+cell('Стоимость',fair,'comp-number comp-fair')+cell('Индексация','<strong>'+(v.indexation>0?'+':'')+fmt(v.indexation)+'</strong><small>'+rateHTML(C.indexationRate([{card:c,value:v}]),'сотрудника')+'</small>','comp-number'+(v.indexation>0?' comp-increase':''))+'</tr><tr id="comp-detail-'+esc(c.unit.task_id)+'" class="comp-detail-row" '+(open?'':'hidden')+'><td colspan="5">'+(open?detailHTML(c,v,r):'')+'</td></tr>';
  }
  function rowsHTML(r=results()){
   if(!r)return '';
   const groups=new Map();for(const row of r.selected){const dept=grouped?department(row.card):'';if(!groups.has(dept))groups.set(dept,[]);groups.get(dept).push(row);}
   return [...groups].sort(([a],[b])=>a.localeCompare(b,'ru')).map(([dept,rows])=>{
    const total=summarize(rows),open=!collapsed.has(dept);
-   const header=grouped?'<tr class="comp-dept-row"><td colspan="5"><button class="comp-dept-heading" type="button" data-comp-action="department" data-comp-department="'+esc(dept)+'" aria-expanded="'+open+'"><span class="comp-dept-name">'+chevron(open)+esc(dept)+' <small>'+total.employees+' чел.</small></span><span class="comp-dept-total"><span>'+(query||filter!=='all'?'Индексация выборки':'Индексация отдела')+(total.calculated<total.employees?' · '+total.calculated+'/'+total.employees+' рассчитано':'')+'</span><strong>'+fmt(total.total)+'</strong></span></button></td></tr>':'';
+   const header=grouped?'<tr class="comp-dept-row"><td colspan="5"><button class="comp-dept-heading" type="button" data-comp-action="department" data-comp-department="'+esc(dept)+'" aria-expanded="'+open+'"><span class="comp-dept-name">'+chevron(open)+esc(dept)+' <small>'+total.employees+' чел.</small></span><span class="comp-dept-total"><span>'+(query||filter!=='all'?'Индексация выборки':'Индексация отдела')+(total.calculated<total.employees?' · '+total.calculated+'/'+total.employees+' рассчитано':'')+'</span><strong>'+fmt(total.total)+'</strong>'+rateHTML(total.rate,query||filter!=='all'?'выборки отдела':'отдела')+'</span></button></td></tr>':'';
    return header+(!grouped||open?rows.map(({card,value})=>personHTML(card,value,r)).join(''):'');
   }).join('')||'<tr><td colspan="5" class="comp-list-empty">'+(query||filter!=='all'?'Нет сотрудников по выбранным условиям':'Нет доступных сотрудников со статусом «Работает»')+'</td></tr>';
  }
  function summaryHTML(r=results()){
   if(!r)return '';
-  const total=summarize(r.selected),previous=summarize(r.selected.map(row=>({value:r.previous.get(row.card.unit.task_id)}))),delta=dirty()&&r.after&&ctx.saved.model&&total.total!==null&&previous.total!==null?C.roundMoney(total.total-previous.total):null;
-  return '<div class="comp-total"><strong>'+fmt(total.total)+'</strong><span>'+(query||filter!=='all'?'Индексация по выборке':'Индексация')+(dirty()&&r.after?' · предпросмотр':'')+'</span></div><div class="comp-summary-meta"><span><strong>'+total.calculated+' / '+total.employees+'</strong>рассчитано</span><span><strong>'+total.positive+'</strong>с индексацией</span>'+(delta!==null?'<span><strong>'+(delta>0?'+':'')+fmt(delta)+'</strong>к сохранённой модели</span>':'')+'</div>';
+  const total=summarize(r.selected),previous=summarize(r.selected.map(row=>({card:row.card,value:r.previous.get(row.card.unit.task_id)}))),delta=dirty()&&r.after&&ctx.saved.model&&total.total!==null&&previous.total!==null?C.roundMoney(total.total-previous.total):null;
+  return '<div class="comp-total"><strong>'+fmt(total.total)+'</strong>'+rateHTML(total.rate,query||filter!=='all'?'выборки':'управления')+'<span>'+(query||filter!=='all'?'Индексация по выборке':'Индексация управления')+(dirty()&&r.after?' · предпросмотр':'')+'</span></div><div class="comp-summary-meta"><span><strong>'+total.calculated+' / '+total.employees+'</strong>рассчитано</span><span><strong>'+total.positive+'</strong>с индексацией</span>'+(delta!==null?'<span><strong>'+(delta>0?'+':'')+fmt(delta)+'</strong>к сохранённой модели</span>':'')+'</div><p class="comp-rate-explanation">Процент группы — отношение суммарной стоимости к суммарному окладу, минус 1, в процентах; минимум 0%. Сумма в рублях — положительные индексации сотрудников.'+(total.rate.partial?' * Проценты рассчитаны только по сотрудникам с полной стоимостью и окладом — '+total.rate.calculated+' из '+total.rate.employees+'.':'')+'</p>';
  }
  function filtersHTML(r=results()){
   if(!r)return '';

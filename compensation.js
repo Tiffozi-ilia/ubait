@@ -29,6 +29,35 @@ const frac=n=>{const str=String(n).toLowerCase(),[mant,exp='0']=str.split('e'),n
 const add=(x,y)=>[x[0]*y[1]+y[0]*x[1],x[1]*y[1]],mul=(x,y)=>[x[0]*y[0],x[1]*y[1]],div=(x,y)=>[x[0]*y[1],x[1]*y[0]];
 const cents=x=>{const sign=x[0]<0n?-1n:1n,a=(x[0]<0n?-x[0]:x[0])*100n,q=(a*2n+x[1])/(2n*x[1])*sign;if(q>BigInt(Number.MAX_SAFE_INTEGER)||q<BigInt(-Number.MAX_SAFE_INTEGER))throw new Error('Сумма вне допустимого диапазона');return Number(q);};
 const roundMoney=n=>cents(frac(n))/100;
+function percentOfTotals(fair,salary){
+ const difference=add(fair,mul(salary,[-1n,1n]));
+ if(difference[0]<=0n)return 0;
+ if(salary[0]===0n)return null;
+ return cents(mul(div(difference,salary),[100n,1n]))/100;
+}
+function indexationPercent(fair,salary){
+ if(!Number.isFinite(fair)||fair<0||!Number.isFinite(salary)||salary<0)return null;
+ try{return percentOfTotals(frac(fair),frac(salary));}catch{return null;}
+}
+function indexationRate(rows){
+ let calculated=0;
+ const result=(percent,reason)=>({percent,reason,calculated,employees:rows.length,partial:calculated<rows.length});
+ const unavailable=reason=>result(null,reason);
+ if(!rows.length)return unavailable('Нет сотрудников для расчёта.');
+ let fair=[0n,1n],salary=[0n,1n];
+ for(const row of rows){
+  const amount=number(row.card?.unit.cost),value=row.value;
+  if(value?.indexation_status!=='ready'||!Number.isFinite(value.fair_cost)||value.fair_cost<0||amount===null||amount<0)continue;
+  calculated++;
+  fair=add(fair,frac(value.fair_cost));salary=add(salary,frac(amount));
+ }
+ if(!calculated)return unavailable('Нет сотрудников с рассчитанной стоимостью и корректным окладом.');
+ try{
+  // Apply the zero floor once, AFTER summing both sides. Do not sum personal raises.
+  const percent=percentOfTotals(fair,salary);
+  return result(percent,percent===null?'Суммарный оклад равен нулю — процент не определён.':calculated<rows.length?'По '+calculated+' из '+rows.length+' сотрудников: карточки без полного расчёта исключены из обеих сумм.':'');
+ }catch{return unavailable('Процент вне допустимого диапазона.');}
+}
 // Two editor views of the same persisted transition model. Switching views never
 // rewrites the model; conversion back is needed only after an actual input edit.
 function relativeCoefficients(steps){
@@ -97,6 +126,6 @@ function analyze(cards,source,saved){
  const totalCents=ready.reduce((sum,r)=>sum+BigInt(Math.round(r.value.indexation*100)),0n);
  return {rows,ready,excluded,summary:{employees:working.length,calculated:ready.length,positive:ready.filter(r=>r.value.indexation>0).length,indexation:totalCents<=BigInt(Number.MAX_SAFE_INTEGER)?Number(totalCents)/100:null,excluded:excluded.length}};
 }
-const api={formulaVersion,defaultModel,number,validateModel,references,roundMoney,relativeCoefficients,transitionCoefficients,appliedCoefficients,cost,fairCost,calculate,analyze,reasons};
+const api={formulaVersion,defaultModel,number,validateModel,references,roundMoney,indexationPercent,indexationRate,relativeCoefficients,transitionCoefficients,appliedCoefficients,cost,fairCost,calculate,analyze,reasons};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.UbaitCompensation=api;
 })(globalThis);
