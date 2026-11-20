@@ -40,7 +40,7 @@ export function indexationXlsx({analysis,source,saved,generated_at,hr_generated_
   return [sum(ready,r=>C.number(r.card.unit.cost)),sum(ready,r=>r.value.fair_cost),sum(ready,r=>r.value.indexation)];
  };
  const rows=analysis.ready.map(row=>{
-  const {card:c,value:v}=row,personalRate=C.indexationRate([row]);
+  const {card:c,value:v}=row,personalRate=C.personalIndexationRate(row);
   return [c.unit.staff,c.unit.task_id,c.unit.team,c.unit.position,labels[v.track],v.score,v.grade,C.number(c.unit.cost),v.fair_cost,v.indexation,percent(personalRate),v.cost_after,'https://pyrus.sovcombank.ru/t#id'+c.unit.task_id,personalRate.reason];
  });
  const total=analysis.summary.indexation;if(total===null)throw new Error('Сумма индексации слишком велика.');
@@ -58,7 +58,7 @@ export function indexationXlsx({analysis,source,saved,generated_at,hr_generated_
   saved.model.growth[kind].forEach((k,i)=>model.push([labels[kind]+' · '+['Юнлинг → Падаван','Падаван → Джедай','Джедай → Магистр'][i],k]));
  }
  const methodStart=model.length;
- model.push(['Процент индексации','max(0, (справедливая стоимость / текущий оклад − 1) × 100). Для отдела и управления используются суммы стоимости и окладов.'],['Неполные данные','В обе суммы входят одни и те же сотрудники с рассчитанной стоимостью и корректным окладом. Покрытие и причины указаны в сводке.'],['Нулевой оклад','При положительной стоимости процент не определён (—). Если стоимость и оклад равны нулю, процент равен 0%.'],['Сумма и процент','Рубли — сумма положительных индексаций сотрудников. Общий процент может быть 0%, даже если отдельным сотрудникам нужна прибавка.']);
+ model.push(['Процент сотрудника','max(0, (справедливая стоимость / текущий оклад − 1) × 100).'],['Неполные данные','В обе суммы входят одни и те же сотрудники с рассчитанной стоимостью и корректным окладом. Покрытие и причины указаны в сводке.'],['Нулевой оклад','При положительной стоимости процент не определён (—). Если стоимость и оклад равны нулю, процент равен 0%.'],['Процент отдела и управления','Сумма индексаций сотрудников / сумма текущих окладов × 100. В знаменатель входят и оклады сотрудников с нулевой индексацией.']);
  const titles=['Индексация','Сводка','Не рассчитано','Модель'];
  const heights=(items,column)=>Object.fromEntries(items.map((row,i)=>[i+1,String(row[column]||'').length>110?44:24]));
  const sheets=[
